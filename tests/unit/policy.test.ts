@@ -73,6 +73,10 @@ describe("decideAccess", () => {
     expect(decideAccess("/connexion", null)).toBe("allow");
     expect(decideAccess("/acces-refuse", null)).toBe("allow");
     expect(decideAccess("/api/auth/callback/google", null)).toBe("allow");
+    expect(decideAccess("/emargement/abc", null)).toBe("allow");
+    expect(decideAccess("/evaluation/abc", null)).toBe("allow");
+    expect(decideAccess("/api/cron", null)).toBe("allow");
+    expect(decideAccess("/emargements", null)).toBe("login");
   });
 
   it("sends anonymous visitors to the login page", () => {

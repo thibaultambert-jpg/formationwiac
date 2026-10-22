@@ -40,7 +40,8 @@ export function resolveRoleOnSignIn(email: string, existingRole: Role | null, in
   return existingRole ?? "employee";
 }
 
-const PUBLIC_PATH_PREFIXES = ["/connexion", "/acces-refuse", "/api/auth"];
+// Token links (attendance, evaluation) and the cron route check their own credentials.
+const PUBLIC_PATH_PREFIXES = ["/connexion", "/acces-refuse", "/api/auth", "/api/cron", "/emargement", "/evaluation"];
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);

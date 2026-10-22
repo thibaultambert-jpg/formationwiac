@@ -145,6 +145,47 @@ back-office (et à l'import CSV), la case « Ne pas envoyer d'email » permet de
 5. Optionnel : **Settings › Domains** pour un domaine personnalisé ; le reporter ensuite dans le client OAuth Google et
    dans `APP_URL`.
 
+## 5. Tâches automatiques (Vercel Cron)
+
+`vercel.json` déclare une tâche quotidienne (`/api/cron`, 05:15 UTC, soit 06:15 ou 07:15 à Paris), compatible avec le plan
+**Hobby**. Elle envoie :
+
+- le **rappel J-X** (X réglable dans **Paramètres › Évaluations et rappels**) aux participants confirmés et aux formateurs ;
+- le **lien d'émargement** personnel le matin de chaque journée de formation, aux participants et aux formateurs (avec la
+  liste des inscrits) ;
+- à la **clôture** (après le dernier créneau) : passage de la session en « Terminée », présent/absent selon l'émargement,
+  **attestation PDF** et **évaluation à chaud** aux présents ;
+- l'**évaluation à froid** à J+60 et la **relance** 5 jours après une évaluation restée sans réponse ;
+- l'anonymisation et la purge des preuves au-delà de la durée de conservation.
+
+Chaque envoi automatique a une clé d'unicité : relancer la tâche n'envoie jamais deux fois le même email.
+
+Mise en place :
+
+1. Générer un secret (`openssl rand -base64 32`) et le saisir dans la variable `CRON_SECRET` sur Vercel : Vercel l'envoie
+   automatiquement à chaque exécution (`Authorization: Bearer …`).
+2. Vérifier l'exécution dans **Vercel › Settings › Cron Jobs** (bouton **Run** pour un test), ou depuis l'application :
+   **Paramètres › Évaluations et rappels › Exécuter les tâches automatiques maintenant**.
+3. Avec un plan **Pro**, passer `"schedule"` à `"15 * * * *"` (toutes les heures) : les liens d'émargement et les évaluations
+   à chaud partent alors au plus tard une heure après l'échéance, au lieu du lendemain matin. Les règles sont écrites pour
+   fonctionner avec les deux fréquences.
+
+## Émargement, évaluations et preuves
+
+- **Participants** : lien personnel reçu par email, valable jusqu'au lendemain de la fin de la session. Chaque
+  demi-journée se signe le jour même, de 30 minutes avant son début jusqu'à 23:59 (signature au doigt ou au stylet, ou
+  nom saisi au clavier). L'horodatage, l'adresse IP et la méthode sont enregistrés.
+- **Formateurs** : les formateurs internes signent depuis **Mes sessions**, les externes depuis leur lien personnel.
+  Dans les deux cas, ils peuvent aussi **faire signer les participants sur leur appareil** (mode tablette).
+- **Corrections** : l'onglet **Émargement** de la session permet de marquer un participant présent ou absent. La
+  correction est tracée et la présence est recalculée si la session est déjà clôturée.
+- **Évaluations** : les questionnaires (à chaud et à froid) se modifient dans **Paramètres › Évaluations et rappels**.
+  Les réponses gardent le libellé des questions au moment de la réponse. L'onglet **Évaluations** de la session présente
+  les moyennes, les répartitions et les verbatims, avec un export CSV.
+- **Documents** : convocation (PDF + programme) envoyée depuis l'onglet **Documents** ; feuille d'émargement PDF ;
+  attestation PDF avec la durée réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement
+  signée, les attestations et les évaluations (réponses et synthèse).
+
 ## Rôles
 
 - Tout nouveau compte du domaine reçoit le rôle **Collaborateur** à sa première connexion.
@@ -166,7 +207,8 @@ back-office (et à l'import CSV), la case « Ne pas envoyer d'email » permet de
   être modifiés.
 - **Durée de conservation** : **Paramètres › Données personnelles** (5 ans par défaut). La page liste les participants
   dont la dernière formation date de plus longtemps et permet de les anonymiser en une fois, ainsi que de supprimer les
-  fichiers de preuve expirés (signatures, documents générés). L'automatisation de ces purges est prévue au lot 4.
+  fichiers de preuve expirés (signatures, documents générés). La tâche quotidienne fait ces deux opérations
+  automatiquement.
 
 ## Import CSV des participants externes
 

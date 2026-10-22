@@ -74,6 +74,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   anonymize: "Anonymisation",
   export: "Export des données",
   purge: "Purge des preuves",
+  automation: "Tâches automatiques",
+  send: "Envoi",
+  sign: "Émargement",
 };
 
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {

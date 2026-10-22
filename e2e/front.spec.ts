@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { domain, signedInContext } from "./support/auth";
-import { createPublishedSession, createTraining, emailsFor } from "./support/db";
+import {
+  createCompletedSessionFor,
+  createPublishedSession,
+  createTraining,
+  emailsFor,
+  linkInternalTrainer,
+} from "./support/db";
 
 async function enrollInThreeClicks(page: Page, trainingTitle: string, confirmLabel: RegExp) {
   await page.goto(`/?q=${encodeURIComponent(trainingTitle)}`);
@@ -96,5 +102,60 @@ test("front rules: closed sessions are hidden, overlapping enrollment is blocked
   await createTraining(hiddenTitle);
   await page.goto(`/?q=${encodeURIComponent(hiddenTitle)}`);
   await expect(page.getByText("Aucune formation ne correspond")).toBeVisible();
+  await context.close();
+});
+
+test("past trainings: certificate download and evaluation from « Mes formations »", async ({ browser }) => {
+  const stamp = Date.now();
+  const title = `Passée ${stamp}`;
+  const person = {
+    email: `front-passe-${stamp}@${domain()}`,
+    role: "employee" as const,
+    firstName: "Paula",
+    lastName: `Passe${stamp}`,
+  };
+  const context = await signedInContext(browser, person);
+  const trainingId = await createTraining(title);
+  await createCompletedSessionFor(trainingId, person.email, `E2E-C-${stamp}`);
+  const page = await context.newPage();
+
+  await page.goto("/mes-formations");
+  const row = page.getByRole("listitem").filter({ hasText: title });
+  const certificate = await page.request.get(
+    (await row.getByRole("link", { name: "Attestation" }).getAttribute("href"))!,
+  );
+  expect(certificate.headers()["content-type"]).toBe("application/pdf");
+
+  await row.getByRole("link", { name: "Donner mon avis" }).click();
+  await expect(page).toHaveURL(/\/evaluation\//);
+  await expect(page.getByRole("heading", { name: "Votre avis sur la formation" })).toBeVisible();
+  await page.getByRole("button", { name: "Envoyer mes réponses" }).click();
+  // Required answers are checked by the browser first, then by the server.
+  await expect(page.getByText("Merci pour vos réponses !")).toHaveCount(0);
+  await context.close();
+});
+
+test("internal trainer: « Mes sessions » with live attendance", async ({ browser }) => {
+  const stamp = Date.now();
+  const person = {
+    email: `front-formateur-${stamp}@${domain()}`,
+    role: "trainer" as const,
+    firstName: "Fanny",
+    lastName: `Anime${stamp}`,
+  };
+  const context = await signedInContext(browser, person);
+  const trainingId = await createTraining(`Animée ${stamp}`);
+  const sessionId = await createPublishedSession(trainingId, {
+    capacity: 5,
+    daysFromNow: 3,
+    reference: `E2E-T-${stamp}`,
+  });
+  await linkInternalTrainer(sessionId, person.email);
+  const page = await context.newPage();
+
+  await page.goto("/mes-sessions");
+  await page.getByRole("link", { name: new RegExp(`Animée ${stamp}`) }).click();
+  await expect(page.getByRole("heading", { name: `Animée ${stamp}` })).toBeVisible();
+  await expect(page.getByText("Émargement fermé")).toBeVisible();
   await context.close();
 });

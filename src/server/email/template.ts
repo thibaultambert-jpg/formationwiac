@@ -11,6 +11,9 @@ export const TEMPLATE_VARIABLES = {
   lien_visio: "Lien visio",
   motif: "Motif (annulation)",
   lien_espace: "Lien vers « Mes formations »",
+  lien_emargement: "Lien personnel d'émargement",
+  lien_evaluation: "Lien vers le questionnaire d'évaluation",
+  inscrits: "Liste des inscrits (email formateur)",
   organisme: "Nom de l'organisme",
 } as const;
 

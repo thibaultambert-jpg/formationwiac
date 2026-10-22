@@ -99,7 +99,7 @@ export async function exportParticipantData(participantId: string) {
  * person are scrubbed; enrollments, attendance and certificates stay for the
  * retention period without identity.
  */
-export async function anonymizeParticipant(participantId: string, actorId: string, reason: string) {
+export async function anonymizeParticipant(participantId: string, actorId: string | null, reason: string) {
   const participant = await db.participant.findUnique({
     where: { id: participantId },
     include: { user: { include: { trainer: true } } },
@@ -226,8 +226,9 @@ export async function proofFilesPastRetention(now: Date, years: number) {
   return { attendances, documents, signatures, count: attendances.length + documents.length + signatures.length };
 }
 
-export async function purgeProofFiles(now: Date, years: number, actorId: string) {
+export async function purgeProofFiles(now: Date, years: number, actorId: string | null) {
   const files = await proofFilesPastRetention(now, years);
+  if (files.count === 0) return 0;
   await deleteStoredFiles([
     ...files.attendances.map((row) => row.signaturePath!),
     ...files.documents.map((row) => row.filePath!),

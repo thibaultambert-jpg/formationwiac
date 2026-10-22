@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarCheck, Video } from "lucide-react";
+import { CalendarCheck, FileDown, Video } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,10 @@ export default async function MyTrainingsPage() {
   const enrollments = participant
     ? await db.enrollment.findMany({
         where: { participantId: participant.id, status: { not: "cancelled" } },
-        include: { session: { include: { training: true, slots: { orderBy: { startsAt: "asc" } } } } },
+        include: {
+          evaluations: true,
+          session: { include: { training: true, slots: { orderBy: { startsAt: "asc" } } } },
+        },
       })
     : [];
 
@@ -142,12 +145,52 @@ export default async function MyTrainingsPage() {
                     {formatDateRange(enrollment.session.slots.map((slot) => slot.startsAt))}
                   </p>
                 </div>
-                <p className="text-muted-foreground text-xs">Attestation et évaluation disponibles prochainement.</p>
+                <PastActions enrollment={enrollment} />
               </li>
             ))}
           </ul>
         )}
       </section>
     </>
+  );
+}
+
+function PastActions({
+  enrollment,
+}: {
+  enrollment: {
+    id: string;
+    status: string;
+    session: { status: string };
+    evaluations: { type: string; submittedAt: Date | null; sentAt: Date | null }[];
+  };
+}) {
+  if (enrollment.status !== "present" || enrollment.session.status !== "completed") {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {enrollment.status === "absent" ? "Absence enregistrée." : "Session en cours de clôture."}
+      </p>
+    );
+  }
+  const pending = (["hot", "cold"] as const).filter((type) => {
+    const evaluation = enrollment.evaluations.find((item) => item.type === type);
+    return type === "hot" ? !evaluation?.submittedAt : Boolean(evaluation?.sentAt && !evaluation.submittedAt);
+  });
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button asChild variant="outline" size="sm">
+        <a href={`/mes-formations/attestation/${enrollment.id}`}>
+          <FileDown aria-hidden="true" />
+          Attestation
+        </a>
+      </Button>
+      {pending.map((type) => (
+        <Button key={type} asChild size="sm">
+          <a href={`/mes-formations/evaluation/${enrollment.id}?type=${type}`}>
+            {type === "hot" ? "Donner mon avis" : "Évaluation à froid"}
+          </a>
+        </Button>
+      ))}
+    </div>
   );
 }

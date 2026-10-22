@@ -15,8 +15,8 @@ by lot (section 11) and stops at the end of each lot for validation.
   adapter). `DATABASE_URL` = pooled connection (runtime), `DIRECT_URL` = direct connection (migrations).
 - Auth.js v5 (`next-auth@beta`) with Google only, JWT sessions of 30 days, no adapter: users are upserted in the
   `signIn` callback (`src/auth.ts`).
-- Gmail API (emails, service account), Supabase Storage (files), Vercel (region `cdg1`). Planned: @react-pdf/renderer
-  (PDF, lot 4).
+- Gmail API (emails, service account), Supabase Storage (files), @react-pdf/renderer (PDF, server only), fflate (ZIP),
+  Vercel (region `cdg1`, daily cron).
 
 ## Conventions
 
@@ -47,6 +47,15 @@ by lot (section 11) and stops at the end of each lot for validation.
 - Front enrollment rules (visibility, deadline, unenrollment) are in `src/server/domain/front-enrollment.ts`; overlapping
   sessions are blocking on the front and only a warning in the BO.
 - GDPR: `src/server/services/privacy.ts` (export, anonymization keeping proofs, retention period).
+- Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by
+  `src/server/services/automation.ts` (cron `/api/cron`, protected by `CRON_SECRET`). Every automatic email has a
+  `dedupKey` (unique on `documents`), claimed before sending, so the job can run hourly or daily and twice safely.
+- Token links (attendance, evaluation, trainer) go through `src/server/tokens.ts` (random 256-bit token, only the
+  SHA-256 hash is stored, with an expiry); their pages live in `src/app/(public)/` and are public in the proxy.
+- PDFs: `src/server/pdf/` (no `lineHeight` on `<Page>`: it hides the fixed footer). Session documents and sends:
+  `src/server/services/session-documents.ts`.
+- A client component that shows the result of an action must stay mounted after `refresh()`: when the action changes
+  what the page renders (closing a session, enrolling…), keep the component mounted or redirect with a query parameter.
 - Lists keep their filters in the URL (GET forms) so that CSV exports reuse them.
 - No physical deletion of records with history: archive (`archivedAt`) or anonymize (`anonymizedAt`).
 - Creations, updates and sends are written to `audit_logs`.
@@ -68,6 +77,10 @@ by lot (section 11) and stops at the end of each lot for validation.
 | Seed (idempotent)       | `pnpm db:seed`                                            |
 | Demo data               | `pnpm db:seed:demo`                                       |
 | Prisma Studio           | `pnpm db:studio`                                          |
+
+`prisma migrate dev` refuses to run in a non-interactive shell when a migration needs confirmation (e.g. enum changes):
+write the SQL with `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script` into a new
+`prisma/migrations/<timestamp>_<name>/migration.sql`, then run `prisma migrate deploy`.
 
 Local database: any PostgreSQL 16, e.g.
 `DATABASE_URL=DIRECT_URL=postgresql://postgres:postgres@localhost:5432/formation_dev`.

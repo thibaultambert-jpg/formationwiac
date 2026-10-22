@@ -54,3 +54,34 @@ test("email templates: edit with live preview", async ({ page }) => {
   await page.getByRole("button", { name: "Rétablir le modèle par défaut" }).click();
   await expect(subject).toHaveValue("Liste d'attente : {{formation}}");
 });
+
+test("dashboard, audit log and evaluation settings", async ({ page }) => {
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: /Sessions des 30 prochains jours/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Sous la capacité minimale à J-10/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Émargements non signés/ })).toBeVisible();
+
+  await page.goto("/admin/parametres/journal?entite=session");
+  await expect(page.getByRole("heading", { name: "Journal d'audit" })).toBeVisible();
+
+  const stamp = Date.now();
+  await page.goto("/admin/parametres/evaluations");
+  const newQuestion = page.locator("div.border-dashed").first();
+  await newQuestion.getByRole("textbox", { name: "Nouvelle question" }).fill(`Question test ${stamp}`);
+  await newQuestion.getByRole("combobox", { name: "Type de réponse" }).selectOption("single_choice");
+  await newQuestion.getByRole("textbox", { name: "Choix (un par ligne)" }).fill("Oui");
+  await newQuestion.getByRole("button", { name: "Ajouter la question" }).click();
+  await expect(page.getByText("Indiquez au moins deux choix, un par ligne.")).toBeVisible();
+  await newQuestion.getByRole("textbox", { name: "Choix (un par ligne)" }).fill("Oui\nNon");
+  await newQuestion.getByRole("button", { name: "Ajouter la question" }).click();
+  const added = page.getByRole("listitem").filter({
+    has: page.getByRole("textbox", { name: "Libellé" }).and(page.locator(`[value="Question test ${stamp}"]`)),
+  });
+  await expect(added).toHaveCount(1);
+  await added.getByRole("button", { name: "Supprimer" }).click();
+  await expect(added).toHaveCount(0);
+
+  // Not clicked here: it would process the sessions of the other tests running in parallel
+  // (the scheduled job is covered by tests/integration/automation.test.ts).
+  await expect(page.getByRole("button", { name: "Exécuter les tâches automatiques maintenant" })).toBeVisible();
+});

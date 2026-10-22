@@ -20,6 +20,8 @@ const serverEnvSchema = z.object({
   // absent, emails go to the local outbox in development.
   GOOGLE_SERVICE_ACCOUNT_KEY: z.string().min(1).optional(),
   GMAIL_SENDER_ADDRESS: z.email().optional(),
+  // Bearer token expected by /api/cron (Vercel Cron sends it automatically).
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -34,6 +34,11 @@ export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body
     body: "Bonjour {{prenom}},\n\nLa formation « {{formation}} » commence. Merci de signer la feuille d'émargement à l'aide de votre lien personnel :\n\n{{lien_emargement}}\n\nMerci,",
   },
   {
+    key: "trainer_attendance_link",
+    subject: "Émargement et liste des inscrits : {{formation}}",
+    body: "Bonjour {{prenom}},\n\nLa formation « {{formation}} » ({{reference}}) que vous animez commence.\n\nInscrits :\n{{inscrits}}\n\nVotre lien personnel pour signer chaque demi-journée :\n{{lien_emargement}}\n\nMerci,",
+  },
+  {
     key: "evaluation_request",
     subject: "Votre avis sur la formation {{formation}}",
     body: "Bonjour {{prenom}},\n\nMerci d'avoir participé à la formation « {{formation}} ». Pouvez-vous prendre quelques minutes pour nous donner votre avis ?\n\n{{lien_evaluation}}\n\nMerci,",
@@ -61,6 +66,13 @@ export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
   "waitlist_notice",
   "waitlist_promotion",
   "session_cancellation",
+  "convocation",
+  "reminder",
+  "attendance_link",
+  "trainer_attendance_link",
+  "evaluation_request",
+  "evaluation_reminder",
+  "certificate",
 ];
 
 export const EMAIL_TYPE_LABELS: Record<string, string> = {
@@ -71,6 +83,7 @@ export const EMAIL_TYPE_LABELS: Record<string, string> = {
   convocation: "Convocation",
   reminder: "Rappel avant la session",
   attendance_link: "Lien d'émargement",
+  trainer_attendance_link: "Lien d'émargement du formateur",
   evaluation_request: "Évaluation",
   evaluation_reminder: "Relance d'évaluation",
   certificate: "Attestation de fin de formation",
@@ -83,6 +96,7 @@ export const EMAIL_DOCUMENT_TYPES: DocumentType[] = [
   "waitlist_promotion",
   "reminder",
   "attendance_link",
+  "trainer_attendance_link",
   "evaluation_request",
   "evaluation_reminder",
   "session_cancellation",

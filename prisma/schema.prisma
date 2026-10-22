@@ -67,6 +67,7 @@ enum SignatureMethod {
 
 enum TokenPurpose {
   attendance
+  trainer_attendance
   hot_evaluation
   cold_evaluation
 }
@@ -92,6 +93,7 @@ enum DocumentType {
   waitlist_promotion
   reminder
   attendance_link
+  trainer_attendance_link
   evaluation_request
   evaluation_reminder
   session_cancellation
@@ -177,6 +179,7 @@ model Trainer {
   user           User?              @relation(fields: [userId], references: [id])
   sessions       SessionTrainer[]
   slotSignatures TrainerSignature[]
+  accessTokens   AccessToken[]
 
   @@map("trainers")
 }
@@ -202,11 +205,12 @@ model TrainingSession {
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
-  training    Training         @relation(fields: [trainingId], references: [id])
-  slots       SessionSlot[]
-  trainers    SessionTrainer[]
-  enrollments Enrollment[]
-  documents   Document[]
+  training     Training         @relation(fields: [trainingId], references: [id])
+  slots        SessionSlot[]
+  trainers     SessionTrainer[]
+  enrollments  Enrollment[]
+  documents    Document[]
+  accessTokens AccessToken[]
 
   @@index([trainingId])
   @@index([status])
@@ -362,20 +366,26 @@ model TrainerSignature {
 }
 
 // Token-based links (attendance, evaluations) usable without login.
-// Only a hash of the token is stored.
+// Only a hash of the token is stored. Participant links reference an
+// enrollment; trainer attendance links reference a session and a trainer.
 model AccessToken {
   id           String       @id @default(uuid(7)) @db.Uuid
   purpose      TokenPurpose
   tokenHash    String       @unique @map("token_hash")
-  enrollmentId String       @map("enrollment_id") @db.Uuid
+  enrollmentId String?      @map("enrollment_id") @db.Uuid
+  sessionId    String?      @map("session_id") @db.Uuid
+  trainerId    String?      @map("trainer_id") @db.Uuid
   expiresAt    DateTime     @map("expires_at") @db.Timestamptz
   lastUsedAt   DateTime?    @map("last_used_at") @db.Timestamptz
   revokedAt    DateTime?    @map("revoked_at") @db.Timestamptz
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id])
+  session    TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trainer    Trainer?         @relation(fields: [trainerId], references: [id])
 
   @@index([enrollmentId, purpose])
+  @@index([sessionId, trainerId])
   @@map("access_tokens")
 }
 
@@ -426,6 +436,8 @@ model Document {
   sentAt         DateTime?    @map("sent_at") @db.Timestamptz
   gmailMessageId String?      @map("gmail_message_id")
   error          String?
+  // Idempotency key of automatic sends (e.g. "reminder:<enrollmentId>").
+  dedupKey       String?      @unique @map("dedup_key")
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   session    TrainingSession? @relation(fields: [sessionId], references: [id])

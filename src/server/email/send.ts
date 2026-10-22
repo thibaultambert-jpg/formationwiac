@@ -15,6 +15,8 @@ export type OutgoingEmail = {
   attachments?: MailAttachment[];
   sessionId?: string | null;
   enrollmentId?: string | null;
+  /** Idempotency key: a second send with the same key is skipped. */
+  dedupKey?: string;
 };
 
 export type EmailTransport = "gmail" | "outbox" | "none";
@@ -26,23 +28,20 @@ export function emailTransport(): EmailTransport {
   return "none";
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002";
+}
+
 /**
  * Sends one email and traces it in `documents` (section 8). Never throws:
  * failures are recorded with their error so that enrollments are not blocked.
+ * With a dedup key, the document row is claimed before sending, so that two
+ * runs of the scheduled job never send the same email twice.
  */
-export async function sendEmail(email: OutgoingEmail): Promise<{ ok: boolean; documentId: string }> {
+export async function sendEmail(
+  email: OutgoingEmail,
+): Promise<{ ok: boolean; skipped?: boolean; documentId?: string }> {
   const env = getEnv();
-  const organization = await db.organizationSettings.findUnique({ where: { id: 1 }, select: { name: true } });
-  const transport = emailTransport();
-  const raw = buildMime({
-    from: { name: organization?.name, email: env.GMAIL_SENDER_ADDRESS ?? "formation@localhost" },
-    to: email.to,
-    subject: email.subject,
-    text: email.text,
-    html: textToHtml(email.text),
-    attachments: email.attachments,
-  });
-
   const base = {
     type: email.type,
     recipientEmail: email.to,
@@ -51,29 +50,49 @@ export async function sendEmail(email: OutgoingEmail): Promise<{ ok: boolean; do
     enrollmentId: email.enrollmentId ?? null,
   };
 
+  let documentId: string;
   try {
+    documentId = (await db.document.create({ data: { ...base, dedupKey: email.dedupKey ?? null } })).id;
+  } catch (error) {
+    if (email.dedupKey && isUniqueViolation(error)) return { ok: false, skipped: true };
+    throw error;
+  }
+
+  try {
+    const organization = await db.organizationSettings.findUnique({ where: { id: 1 }, select: { name: true } });
+    const transport = emailTransport();
+    const raw = buildMime({
+      from: { name: organization?.name, email: env.GMAIL_SENDER_ADDRESS ?? "formation@localhost" },
+      to: email.to,
+      subject: email.subject,
+      text: email.text,
+      html: textToHtml(email.text),
+      attachments: email.attachments,
+    });
+
     if (transport === "gmail") {
       const messageId = await sendWithGmail(env.GOOGLE_SERVICE_ACCOUNT_KEY!, env.GMAIL_SENDER_ADDRESS!, raw);
-      const document = await db.document.create({ data: { ...base, sentAt: new Date(), gmailMessageId: messageId } });
-      return { ok: true, documentId: document.id };
+      await db.document.update({ where: { id: documentId }, data: { sentAt: new Date(), gmailMessageId: messageId } });
+      return { ok: true, documentId };
     }
     if (transport === "outbox") {
       const filePath = await storeBuffer("boite-envoi", "eml", Buffer.from(raw, "utf8"), "message/rfc822");
-      const document = await db.document.create({ data: { ...base, sentAt: new Date(), filePath } });
-      return { ok: true, documentId: document.id };
+      await db.document.update({ where: { id: documentId }, data: { sentAt: new Date(), filePath } });
+      return { ok: true, documentId };
     }
-    const document = await db.document.create({
+    await db.document.update({
+      where: { id: documentId },
       data: {
-        ...base,
         error: "Envoi impossible : Gmail n'est pas configuré (GOOGLE_SERVICE_ACCOUNT_KEY, GMAIL_SENDER_ADDRESS).",
       },
     });
-    return { ok: false, documentId: document.id };
+    return { ok: false, documentId };
   } catch (error) {
     console.error("Email sending failed", error);
-    const document = await db.document.create({
-      data: { ...base, error: error instanceof Error ? error.message.slice(0, 500) : "Erreur inconnue" },
+    await db.document.update({
+      where: { id: documentId },
+      data: { error: error instanceof Error ? error.message.slice(0, 500) : "Erreur inconnue" },
     });
-    return { ok: false, documentId: document.id };
+    return { ok: false, documentId };
   }
 }

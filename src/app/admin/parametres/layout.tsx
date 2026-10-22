@@ -5,14 +5,16 @@ const SETTINGS_TABS = [
   { href: "/admin/parametres/organisme", label: "Organisme" },
   { href: "/admin/parametres/themes", label: "Thèmes" },
   { href: "/admin/parametres/emails", label: "Emails" },
+  { href: "/admin/parametres/evaluations", label: "Évaluations et rappels" },
   { href: "/admin/parametres/donnees", label: "Données personnelles" },
   { href: "/admin/parametres/utilisateurs", label: "Utilisateurs et rôles" },
+  { href: "/admin/parametres/journal", label: "Journal d'audit" },
 ];
 
 export default function SettingsLayout({ children }: LayoutProps<"/admin/parametres">) {
   return (
     <>
-      <PageHeader title="Paramètres" description="Questionnaires d'évaluation et délais de rappel à venir au lot 4." />
+      <PageHeader title="Paramètres" />
       <TabNav items={SETTINGS_TABS} label="Sections des paramètres" />
       {children}
     </>

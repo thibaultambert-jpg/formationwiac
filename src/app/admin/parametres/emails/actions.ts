@@ -25,20 +25,7 @@ export async function saveEmailTemplate(_state: ActionState, formData: FormData)
   }
 
   if (!isConfirmed(formData)) {
-    const unknown = unknownPlaceholders(`${subject}\n${body}`, [
-      "prenom",
-      "nom",
-      "formation",
-      "reference",
-      "dates",
-      "lieu",
-      "lien_visio",
-      "motif",
-      "lien_espace",
-      "organisme",
-      "lien_emargement",
-      "lien_evaluation",
-    ]);
+    const unknown = unknownPlaceholders(`${subject}\n${body}`);
     if (unknown.length > 0) {
       return {
         status: "warning",

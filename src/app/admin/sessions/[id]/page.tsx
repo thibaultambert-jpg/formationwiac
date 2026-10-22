@@ -10,7 +10,10 @@ import { requireRole } from "@/server/auth/guards";
 import { formatDecimal } from "@/server/domain/numbers";
 import { canCancel, canDeleteSession, canPublish, canUnpublish } from "@/server/domain/session-status";
 import { totalHours } from "@/server/domain/slots";
+import { ActionButton } from "@/components/forms/action-button";
+import { closureDue } from "@/server/domain/automation";
 import { deleteSession, duplicateSession, publishSession, unpublishSession } from "../actions";
+import { closeSessionAction } from "./documents/actions";
 import { getSessionDetail } from "../session-data";
 import { CancelSessionDialog } from "./cancel-dialog";
 
@@ -32,6 +35,14 @@ export default async function SessionInfoPage({ params, searchParams }: PageProp
         <Alert variant="success">
           <AlertDescription>
             Session {session.reference} créée en brouillon. Publiez-la quand elle est prête, puis ajoutez les inscrits.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {typeof query.cloture === "string" && /^\d+-\d+$/.test(query.cloture) ? (
+        <Alert variant="success">
+          <AlertDescription>
+            Session clôturée : {query.cloture.split("-")[0]} attestation(s) et {query.cloture.split("-")[1]}{" "}
+            évaluation(s) envoyée(s).
           </AlertDescription>
         </Alert>
       ) : null}
@@ -83,6 +94,16 @@ export default async function SessionInfoPage({ params, searchParams }: PageProp
         </form>
         {canCancel(session.status) ? (
           <CancelSessionDialog sessionId={session.id} enrolled={session.seats + session.waitlisted} />
+        ) : null}
+        {(session.status === "published" || session.status === "full") &&
+        session.slots.length > 0 &&
+        closureDue(session.slots.at(-1)!.endsAt, new Date()) ? (
+          <ActionButton
+            action={closeSessionAction}
+            hidden={{ sessionId: session.id }}
+            label="Clôturer maintenant"
+            variant="secondary"
+          />
         ) : null}
         {canDeleteSession(session.total) ? (
           <form action={deleteSession}>
