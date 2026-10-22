@@ -1,0 +1,488 @@
+// Data model — see docs/cahier-des-charges.md, section 5.
+// Tables and columns are snake_case in the database; models are PascalCase.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────── Enums ─────────────
+
+enum UserRole {
+  admin
+  trainer
+  employee
+}
+
+enum TrainingModality {
+  in_person
+  remote
+  blended
+}
+
+enum TrainerType {
+  internal
+  external
+}
+
+enum SessionStatus {
+  draft
+  published
+  full
+  completed
+  cancelled
+}
+
+enum ParticipantType {
+  internal
+  external
+}
+
+enum EnrollmentStatus {
+  confirmed
+  waitlisted
+  cancelled
+  present
+  absent
+}
+
+enum EnrollmentSource {
+  front
+  back_office
+}
+
+enum EvaluationType {
+  hot
+  cold
+}
+
+enum SignatureMethod {
+  participant_link
+  trainer_device
+}
+
+enum TokenPurpose {
+  attendance
+  hot_evaluation
+  cold_evaluation
+}
+
+enum QuestionAnswerType {
+  scale_1_5
+  scale_0_10
+  single_choice
+  choice_with_other
+  text
+}
+
+// Every generated PDF and every email sent is traced in `documents` (section 8).
+enum DocumentType {
+  // PDF documents
+  convocation
+  attendance_sheet
+  certificate
+  program
+  // Emails
+  enrollment_confirmation
+  waitlist_notice
+  waitlist_promotion
+  reminder
+  attendance_link
+  evaluation_request
+  evaluation_reminder
+  session_cancellation
+}
+
+// ───────────── Users ─────────────
+
+model User {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  email       String    @unique
+  firstName   String?   @map("first_name")
+  lastName    String?   @map("last_name")
+  role        UserRole  @default(employee)
+  department  String?
+  active      Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  trainer            Trainer?
+  participant        Participant?
+  enrollmentsCreated Enrollment[] @relation("EnrolledBy")
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+// ───────────── Catalogue ─────────────
+
+// Training themes, managed in the settings screen (catalogue filter, section 7).
+model Theme {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique
+  position  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  trainings Training[]
+
+  @@map("themes")
+}
+
+model Training {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  title          String
+  slug           String           @unique
+  themeId        String?          @map("theme_id") @db.Uuid
+  objectives     String           @db.Text
+  prerequisites  String?          @db.Text
+  targetAudience String?          @map("target_audience") @db.Text
+  programText    String?          @map("program_text") @db.Text
+  programPdfPath String?          @map("program_pdf_path")
+  durationHours  Decimal          @map("duration_hours") @db.Decimal(5, 1)
+  modality       TrainingModality
+  priceExclTax   Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  theme    Theme?            @relation(fields: [themeId], references: [id])
+  sessions TrainingSession[]
+
+  @@index([themeId])
+  @@map("trainings")
+}
+
+model Trainer {
+  id          String      @id @default(uuid(7)) @db.Uuid
+  type        TrainerType
+  userId      String?     @unique @map("user_id") @db.Uuid
+  firstName   String      @map("first_name")
+  lastName    String      @map("last_name")
+  email       String
+  phone       String?
+  company     String?
+  specialties String[]
+  cvPath      String?     @map("cv_path")
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  user           User?              @relation(fields: [userId], references: [id])
+  sessions       SessionTrainer[]
+  slotSignatures TrainerSignature[]
+
+  @@map("trainers")
+}
+
+// ───────────── Sessions ─────────────
+
+// Named TrainingSession to avoid confusion with authentication sessions.
+model TrainingSession {
+  id                   String        @id @default(uuid(7)) @db.Uuid
+  trainingId           String        @map("training_id") @db.Uuid
+  reference            String        @unique // e.g. FORM-2026-014
+  status               SessionStatus @default(draft)
+  location             String?
+  videoLink            String?       @map("video_link")
+  capacityMax          Int           @map("capacity_max")
+  capacityMin          Int?          @map("capacity_min")
+  registrationDeadline DateTime?     @map("registration_deadline") @db.Timestamptz
+  openToInternal       Boolean       @default(true) @map("open_to_internal")
+  openToExternal       Boolean       @default(false) @map("open_to_external")
+  internalNotes        String?       @map("internal_notes") @db.Text
+  cancelledAt          DateTime?     @map("cancelled_at") @db.Timestamptz
+  cancellationReason   String?       @map("cancellation_reason")
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  training    Training         @relation(fields: [trainingId], references: [id])
+  slots       SessionSlot[]
+  trainers    SessionTrainer[]
+  enrollments Enrollment[]
+  documents   Document[]
+
+  @@index([trainingId])
+  @@index([status])
+  @@map("sessions")
+}
+
+// A slot is a half-day (or any time range) used for attendance tracking.
+model SessionSlot {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  startsAt  DateTime @map("starts_at") @db.Timestamptz
+  endsAt    DateTime @map("ends_at") @db.Timestamptz
+
+  session           TrainingSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  attendances       Attendance[]
+  trainerSignatures TrainerSignature[]
+
+  @@index([sessionId, startsAt])
+  @@map("session_slots")
+}
+
+model SessionTrainer {
+  sessionId String @map("session_id") @db.Uuid
+  trainerId String @map("trainer_id") @db.Uuid
+
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trainer Trainer         @relation(fields: [trainerId], references: [id])
+
+  @@id([sessionId, trainerId])
+  @@index([trainerId])
+  @@map("session_trainers")
+}
+
+// ───────────── External companies and participants ─────────────
+
+model Company {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  name             String
+  siret            String?   @unique
+  addressLine      String?   @map("address_line")
+  postalCode       String?   @map("postal_code")
+  city             String?
+  country          String    @default("France")
+  mainContactId    String?   @unique @map("main_contact_id") @db.Uuid
+  billingEmail     String?   @map("billing_email")
+  hubspotCompanyId String?   @unique @map("hubspot_company_id")
+  mergedIntoId     String?   @map("merged_into_id") @db.Uuid
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  mainContact       Participant?  @relation("CompanyMainContact", fields: [mainContactId], references: [id])
+  participants      Participant[] @relation("CompanyParticipants")
+  billedEnrollments Enrollment[]
+  mergedInto        Company?      @relation("CompanyMerge", fields: [mergedIntoId], references: [id])
+  mergedCompanies   Company[]     @relation("CompanyMerge")
+
+  @@index([name])
+  @@map("companies")
+}
+
+model Participant {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  type             ParticipantType
+  userId           String?         @unique @map("user_id") @db.Uuid
+  companyId        String?         @map("company_id") @db.Uuid
+  firstName        String          @map("first_name")
+  lastName         String          @map("last_name")
+  email            String          @unique
+  jobTitle         String?         @map("job_title")
+  phone            String?
+  hubspotContactId String?         @unique @map("hubspot_contact_id")
+  archivedAt       DateTime?       @map("archived_at") @db.Timestamptz
+  anonymizedAt     DateTime?       @map("anonymized_at") @db.Timestamptz
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  user          User?        @relation(fields: [userId], references: [id])
+  company       Company?     @relation("CompanyParticipants", fields: [companyId], references: [id])
+  mainContactOf Company?     @relation("CompanyMainContact")
+  enrollments   Enrollment[]
+
+  @@index([companyId])
+  @@index([lastName, firstName])
+  @@map("participants")
+}
+
+// ───────────── Enrollments and follow-up ─────────────
+
+model Enrollment {
+  id                 String           @id @default(uuid(7)) @db.Uuid
+  sessionId          String           @map("session_id") @db.Uuid
+  participantId      String           @map("participant_id") @db.Uuid
+  status             EnrollmentStatus
+  source             EnrollmentSource
+  enrolledById       String?          @map("enrolled_by_id") @db.Uuid
+  // Billing fields kept for the future invoicing tool, no logic in V1.
+  appliedPrice       Decimal?         @map("applied_price") @db.Decimal(10, 2)
+  billingCompanyId   String?          @map("billing_company_id") @db.Uuid
+  enrolledAt         DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
+  motivation         String?          @db.Text
+  cancelledAt        DateTime?        @map("cancelled_at") @db.Timestamptz
+  cancellationReason String?          @map("cancellation_reason")
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  session        TrainingSession @relation(fields: [sessionId], references: [id])
+  participant    Participant     @relation(fields: [participantId], references: [id])
+  enrolledBy     User?           @relation("EnrolledBy", fields: [enrolledById], references: [id])
+  billingCompany Company?        @relation(fields: [billingCompanyId], references: [id])
+  attendances    Attendance[]
+  evaluations    Evaluation[]
+  documents      Document[]
+  accessTokens   AccessToken[]
+
+  @@unique([sessionId, participantId])
+  // Waitlist order: first waitlisted by enrolledAt.
+  @@index([sessionId, status, enrolledAt])
+  @@index([participantId])
+  @@map("enrollments")
+}
+
+model Attendance {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  enrollmentId  String           @map("enrollment_id") @db.Uuid
+  slotId        String           @map("slot_id") @db.Uuid
+  present       Boolean          @default(false)
+  signaturePath String?          @map("signature_path")
+  signedAt      DateTime?        @map("signed_at") @db.Timestamptz
+  ipAddress     String?          @map("ip_address")
+  method        SignatureMethod?
+
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id])
+  slot       SessionSlot @relation(fields: [slotId], references: [id])
+
+  @@unique([enrollmentId, slotId])
+  @@index([slotId])
+  @@map("attendances")
+}
+
+// Trainer signature per slot, printed on the attendance sheet.
+model TrainerSignature {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  slotId        String   @map("slot_id") @db.Uuid
+  trainerId     String   @map("trainer_id") @db.Uuid
+  signaturePath String   @map("signature_path")
+  signedAt      DateTime @map("signed_at") @db.Timestamptz
+
+  slot    SessionSlot @relation(fields: [slotId], references: [id])
+  trainer Trainer     @relation(fields: [trainerId], references: [id])
+
+  @@unique([slotId, trainerId])
+  @@map("trainer_signatures")
+}
+
+// Token-based links (attendance, evaluations) usable without login.
+// Only a hash of the token is stored.
+model AccessToken {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  purpose      TokenPurpose
+  tokenHash    String       @unique @map("token_hash")
+  enrollmentId String       @map("enrollment_id") @db.Uuid
+  expiresAt    DateTime     @map("expires_at") @db.Timestamptz
+  lastUsedAt   DateTime?    @map("last_used_at") @db.Timestamptz
+  revokedAt    DateTime?    @map("revoked_at") @db.Timestamptz
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@index([enrollmentId, purpose])
+  @@map("access_tokens")
+}
+
+model Evaluation {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  enrollmentId   String         @map("enrollment_id") @db.Uuid
+  type           EvaluationType
+  // [{ questionId, label, answerType, answer }] — labels are frozen at submission
+  // so later edits of the questionnaire do not alter past answers.
+  answers        Json?
+  globalScore    Decimal?       @map("global_score") @db.Decimal(4, 2)
+  sentAt         DateTime?      @map("sent_at") @db.Timestamptz
+  reminderSentAt DateTime?      @map("reminder_sent_at") @db.Timestamptz
+  submittedAt    DateTime?      @map("submitted_at") @db.Timestamptz
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@unique([enrollmentId, type])
+  @@map("evaluations")
+}
+
+// Editable questionnaire (appendix), managed in the settings screen.
+model EvaluationQuestion {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  evaluationType EvaluationType     @map("evaluation_type")
+  position       Int
+  label          String
+  answerType     QuestionAnswerType @map("answer_type")
+  options        Json? // choice labels for single_choice / choice_with_other
+  required       Boolean            @default(true)
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([evaluationType, position])
+  @@map("evaluation_questions")
+}
+
+model Document {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  type           DocumentType
+  sessionId      String?      @map("session_id") @db.Uuid
+  enrollmentId   String?      @map("enrollment_id") @db.Uuid
+  filePath       String?      @map("file_path")
+  recipientEmail String?      @map("recipient_email")
+  generatedAt    DateTime?    @map("generated_at") @db.Timestamptz
+  sentAt         DateTime?    @map("sent_at") @db.Timestamptz
+  gmailMessageId String?      @map("gmail_message_id")
+  error          String?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  session    TrainingSession? @relation(fields: [sessionId], references: [id])
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id])
+
+  @@index([sessionId])
+  @@index([enrollmentId])
+  @@map("documents")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid // null for system actions (cron)
+  action    String // create, update, archive, send, role_change, …
+  entity    String
+  entityId  String   @map("entity_id")
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ───────────── Settings ─────────────
+
+// Single row (id = 1).
+model OrganizationSettings {
+  id                        Int      @id @default(1)
+  name                      String
+  addressLine               String?  @map("address_line")
+  postalCode                String?  @map("postal_code")
+  city                      String?
+  siret                     String?
+  activityDeclarationNumber String?  @map("activity_declaration_number")
+  logoPath                  String?  @map("logo_path")
+  managerName               String?  @map("manager_name")
+  managerTitle              String?  @map("manager_title")
+  managerSignaturePath      String?  @map("manager_signature_path")
+  contactEmail              String?  @map("contact_email")
+  reminderDaysBefore        Int      @default(3) @map("reminder_days_before")
+  coldEvaluationDays        Int      @default(60) @map("cold_evaluation_days")
+  evaluationReminderDays    Int      @default(5) @map("evaluation_reminder_days")
+  dataRetentionYears        Int      @default(5) @map("data_retention_years")
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("organization_settings")
+}
+
+// One editable template per email type ({{prenom}}, {{formation}}, …).
+model EmailTemplate {
+  key       DocumentType @id
+  subject   String
+  body      String       @db.Text
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("email_templates")
+}

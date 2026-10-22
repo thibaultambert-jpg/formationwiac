@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+import { decideAccess, isAllowedGoogleAccount, resolveRoleOnSignIn } from "@/server/auth/policy";
+
+const DOMAIN = "example.fr";
+
+describe("isAllowedGoogleAccount", () => {
+  it("accepts a verified account of the allowed Workspace domain", () => {
+    expect(
+      isAllowedGoogleAccount({ email: "Jane.Doe@Example.fr", emailVerified: true, hostedDomain: "example.fr" }, DOMAIN),
+    ).toBe(true);
+  });
+
+  it("rejects a personal Gmail account", () => {
+    expect(isAllowedGoogleAccount({ email: "jane@gmail.com", emailVerified: true, hostedDomain: null }, DOMAIN)).toBe(
+      false,
+    );
+  });
+
+  it("rejects another Workspace domain", () => {
+    expect(
+      isAllowedGoogleAccount({ email: "jane@other.fr", emailVerified: true, hostedDomain: "other.fr" }, DOMAIN),
+    ).toBe(false);
+  });
+
+  it("rejects a mismatch between the hd claim and the email domain", () => {
+    expect(
+      isAllowedGoogleAccount({ email: "jane@other.fr", emailVerified: true, hostedDomain: "example.fr" }, DOMAIN),
+    ).toBe(false);
+    expect(
+      isAllowedGoogleAccount({ email: "jane@example.fr", emailVerified: true, hostedDomain: "other.fr" }, DOMAIN),
+    ).toBe(false);
+  });
+
+  it("rejects a look-alike domain suffix", () => {
+    expect(
+      isAllowedGoogleAccount({ email: "jane@evilexample.fr", emailVerified: true, hostedDomain: "example.fr" }, DOMAIN),
+    ).toBe(false);
+  });
+
+  it("rejects an unverified email", () => {
+    expect(
+      isAllowedGoogleAccount({ email: "jane@example.fr", emailVerified: false, hostedDomain: "example.fr" }, DOMAIN),
+    ).toBe(false);
+  });
+
+  it("rejects everything when no domain is configured", () => {
+    expect(isAllowedGoogleAccount({ email: "jane@example.fr", emailVerified: true, hostedDomain: "" }, "")).toBe(false);
+  });
+});
+
+describe("resolveRoleOnSignIn", () => {
+  it("gives the employee role to a new account", () => {
+    expect(resolveRoleOnSignIn("new@example.fr", null, "admin@example.fr")).toBe("employee");
+  });
+
+  it("keeps the existing role of a known account", () => {
+    expect(resolveRoleOnSignIn("trainer@example.fr", "trainer", "admin@example.fr")).toBe("trainer");
+  });
+
+  it("always makes the initial admin email an admin, case-insensitively", () => {
+    expect(resolveRoleOnSignIn("Admin@Example.fr", null, "admin@example.fr")).toBe("admin");
+    expect(resolveRoleOnSignIn("admin@example.fr", "employee", "ADMIN@example.fr")).toBe("admin");
+  });
+});
+
+describe("decideAccess", () => {
+  it("lets anyone reach the login and auth routes", () => {
+    expect(decideAccess("/connexion", null)).toBe("allow");
+    expect(decideAccess("/acces-refuse", null)).toBe("allow");
+    expect(decideAccess("/api/auth/callback/google", null)).toBe("allow");
+  });
+
+  it("sends anonymous visitors to the login page", () => {
+    expect(decideAccess("/", null)).toBe("login");
+    expect(decideAccess("/mes-formations", null)).toBe("login");
+    expect(decideAccess("/admin", null)).toBe("login");
+  });
+
+  it("reserves /admin to administrators", () => {
+    expect(decideAccess("/admin", "admin")).toBe("allow");
+    expect(decideAccess("/admin/sessions", "admin")).toBe("allow");
+    expect(decideAccess("/admin", "employee")).toBe("forbidden");
+    expect(decideAccess("/admin/formations", "employee")).toBe("forbidden");
+    expect(decideAccess("/admin", "trainer")).toBe("forbidden");
+  });
+
+  it("does not treat look-alike paths as admin routes", () => {
+    expect(decideAccess("/administration", "employee")).toBe("allow");
+  });
+
+  it("reserves « Mes sessions » to trainers and administrators", () => {
+    expect(decideAccess("/mes-sessions", "trainer")).toBe("allow");
+    expect(decideAccess("/mes-sessions", "admin")).toBe("allow");
+    expect(decideAccess("/mes-sessions", "employee")).toBe("forbidden");
+  });
+
+  it("lets every signed-in user reach the front", () => {
+    expect(decideAccess("/", "employee")).toBe("allow");
+    expect(decideAccess("/mes-formations", "employee")).toBe("allow");
+  });
+});
