@@ -15,7 +15,8 @@ by lot (section 11) and stops at the end of each lot for validation.
   adapter). `DATABASE_URL` = pooled connection (runtime), `DIRECT_URL` = direct connection (migrations).
 - Auth.js v5 (`next-auth@beta`) with Google only, JWT sessions of 30 days, no adapter: users are upserted in the
   `signIn` callback (`src/auth.ts`).
-- Planned: Gmail API (emails), @react-pdf/renderer (PDF), Supabase Storage (files), Vercel (region `cdg1`).
+- Gmail API (emails, service account), Supabase Storage (files), Vercel (region `cdg1`). Planned: @react-pdf/renderer
+  (PDF, lot 4).
 
 ## Conventions
 
@@ -39,6 +40,13 @@ by lot (section 11) and stops at the end of each lot for validation.
   is submitted again with `confirm=1`.
 - Files are stored through `src/server/storage.ts` (Supabase Storage, or `.storage/` in development) and always served
   by the authenticated route `/fichiers/[...path]`.
+- Emails: `src/server/email/` (templates with `{{variables}}`, MIME, .ics, Gmail service account). Send through
+  `sendEmail()` (traced in `documents`, never throws) and schedule notices with `after()` via
+  `scheduleEnrollmentNotices()` once the transaction is committed. Without Gmail, emails go to the local outbox
+  (`.storage/boite-envoi/`) in development.
+- Front enrollment rules (visibility, deadline, unenrollment) are in `src/server/domain/front-enrollment.ts`; overlapping
+  sessions are blocking on the front and only a warning in the BO.
+- GDPR: `src/server/services/privacy.ts` (export, anonymization keeping proofs, retention period).
 - Lists keep their filters in the URL (GET forms) so that CSV exports reuse them.
 - No physical deletion of records with history: archive (`archivedAt`) or anonymize (`anonymizedAt`).
 - Creations, updates and sends are written to `audit_logs`.
@@ -65,7 +73,7 @@ Local database: any PostgreSQL 16, e.g.
 `DATABASE_URL=DIRECT_URL=postgresql://postgres:postgres@localhost:5432/formation_dev`.
 
 E2E tests sign in with session cookies generated in `e2e/global-setup.ts` (no Google, no backdoor in the app) and
-need a migrated database; they run the production build with `ALLOW_LOCAL_STORAGE=1`.
+need a migrated database; they run the production build with `ALLOW_LOCAL_STORAGE=1` and `ALLOW_LOCAL_OUTBOX=1`.
 
 Playwright is pinned to 1.56.1 to match the Chromium pre-installed in the Claude Code sandbox
 (`/opt/pw-browsers`); do not run `playwright install` there.

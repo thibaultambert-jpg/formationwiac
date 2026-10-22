@@ -16,6 +16,10 @@ const serverEnvSchema = z.object({
   SUPABASE_URL: z.url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   SUPABASE_STORAGE_BUCKET: z.string().min(1).default("documents"),
+  // Gmail API through a service account with domain-wide delegation; when
+  // absent, emails go to the local outbox in development.
+  GOOGLE_SERVICE_ACCOUNT_KEY: z.string().min(1).optional(),
+  GMAIL_SENDER_ADDRESS: z.email().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

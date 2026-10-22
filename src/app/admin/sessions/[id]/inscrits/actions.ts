@@ -8,7 +8,7 @@ import { requireRole } from "@/server/auth/guards";
 import { parseCsv } from "@/server/domain/csv";
 import { parseFrenchDecimal } from "@/server/domain/numbers";
 import { parseImportRows } from "@/server/domain/participant-import";
-import { errorState, formValues, isConfirmed, text, zodFieldErrors, type ActionState } from "@/server/forms";
+import { checkbox, errorState, formValues, isConfirmed, text, zodFieldErrors, type ActionState } from "@/server/forms";
 import {
   createCompany,
   createExternalParticipant,
@@ -26,7 +26,16 @@ import {
   overlappingEnrollments,
   updateEnrollment,
 } from "@/server/services/enrollments";
+import { noticeForStatus, promotionNotices, scheduleEnrollmentNotices } from "@/server/email/notifications";
 import { MAX_UPLOAD_BYTES, readUpload } from "@/server/storage";
+
+/** BO additions notify the participant unless "Ne pas envoyer d'email" is checked. */
+function notifyNew(formData: FormData, enrollments: { id: string; status: string }[]) {
+  if (checkbox(formData, "silent")) return;
+  scheduleEnrollmentNotices(
+    enrollments.map((enrollment) => ({ enrollmentId: enrollment.id, notice: noticeForStatus(enrollment.status) })),
+  );
+}
 
 function enrolledMessage(name: string, status: string): string {
   return status === "waitlisted"
@@ -70,6 +79,7 @@ export async function addInternalEnrollment(_state: ActionState, formData: FormD
         motivation: text(formData, "motivation"),
       });
     });
+    notifyNew(formData, [enrollment]);
     refresh();
     return { status: "success", message: enrolledMessage(name, enrollment.status) };
   } catch (error) {
@@ -197,6 +207,7 @@ export async function addExternalEnrollment(_state: ActionState, formData: FormD
       }
       return { company, participant, enrollment };
     });
+    notifyNew(formData, [result.enrollment]);
     refresh();
     return {
       status: "success",
@@ -245,6 +256,7 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
     );
   }
 
+  const created: { id: string; status: string }[] = [];
   const report: ImportReport = {
     confirmed: 0,
     waitlisted: 0,
@@ -323,6 +335,7 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
             source: "back_office",
             actorId: actor.id,
           });
+          created.push(enrollment);
           if (enrollment.status === "waitlisted") report.waitlisted++;
           else report.confirmed++;
         }
@@ -341,6 +354,7 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
     throw error;
   }
 
+  notifyNew(formData, created);
   refresh();
   const parts = [
     `${report.confirmed} inscrit(s)`,
@@ -377,6 +391,7 @@ export async function updateEnrollmentAction(_state: ActionState, formData: Form
 
   try {
     const { promoted } = await updateEnrollment(parsed.data.enrollmentId, parsed.data, actor.id);
+    scheduleEnrollmentNotices(promotionNotices(promoted));
     refresh();
     return {
       status: "success",
@@ -419,6 +434,7 @@ export async function moveEnrollmentAction(_state: ActionState, formData: FormDa
 
   try {
     const result = await moveEnrollment(enrollmentId, targetSessionId, actor.id);
+    scheduleEnrollmentNotices(promotionNotices(result.promoted));
     refresh();
     return {
       status: "success",

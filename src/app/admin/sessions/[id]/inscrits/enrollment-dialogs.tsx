@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ArrowRightLeft, Building2, Pencil, Upload, UserPlus } from "lucide-react";
 import { ActionForm, SubmitButton } from "@/components/forms/action-form";
-import { FileField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
+import { CheckboxField, FileField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
 import { SearchPicker } from "@/components/forms/search-picker";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +45,7 @@ export function AddInternalDialog({ sessionId }: { sessionId: string }) {
           <input type="hidden" name="sessionId" value={sessionId} />
           <SearchPicker name="userId" label="Collaborateur" required search={searchUsers} placeholder="Nom ou email" />
           <TextareaField name="motivation" label="Motivation ou besoin" />
+          <CheckboxField name="silent" label="Ne pas envoyer d'email au participant" />
           <SubmitButton>Inscrire</SubmitButton>
         </ActionForm>
       </DialogContent>
@@ -233,6 +234,7 @@ export function AddExternalDialog({ sessionId, disabled }: { sessionId: string; 
             )}
           </section>
 
+          <CheckboxField name="silent" label="Ne pas envoyer d'email au participant" />
           <div className="flex flex-wrap gap-2">
             <SubmitButton>Inscrire</SubmitButton>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
@@ -274,6 +276,7 @@ export function ImportCsvDialog({ sessionId, disabled }: { sessionId: string; di
         <ActionForm action={importExternalCsv}>
           <input type="hidden" name="sessionId" value={sessionId} />
           <FileField name="file" label="Fichier CSV" required accept=".csv,text/csv" />
+          <CheckboxField name="silent" label="Ne pas envoyer d'email aux participants importés" />
           <SubmitButton>Importer</SubmitButton>
         </ActionForm>
       </DialogContent>

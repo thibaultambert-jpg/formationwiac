@@ -106,7 +106,9 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                 >
                   <div className="min-w-0">
                     <p className="font-medium">
-                      {participant.firstName} {participant.lastName}
+                      <Link href={`/admin/entreprises/participants/${participant.id}`} className="hover:underline">
+                        {participant.firstName} {participant.lastName}
+                      </Link>
                       {participant.id === company.mainContactId ? (
                         <Badge variant="info" className="ml-2">
                           Contact principal

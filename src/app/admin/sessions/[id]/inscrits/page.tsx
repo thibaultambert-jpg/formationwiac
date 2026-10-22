@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
@@ -131,7 +132,12 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                   className={enrollment.status === "cancelled" ? "text-muted-foreground" : undefined}
                 >
                   <TableCell>
-                    <span className="font-medium">{name}</span>
+                    <Link
+                      href={`/admin/entreprises/participants/${participant.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {name}
+                    </Link>
                     <span className="text-muted-foreground block text-xs">{participant.email}</span>
                   </TableCell>
                   <TableCell>{PARTICIPANT_TYPE_LABELS[participant.type]}</TableCell>

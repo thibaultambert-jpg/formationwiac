@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getEnv } from "@/lib/env";
 
@@ -36,6 +36,8 @@ const CONTENT_TYPES: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   png: "image/png",
   jpg: "image/jpeg",
+  eml: "message/rfc822",
+  ics: "text/calendar",
 };
 
 export class UploadError extends Error {}
@@ -74,22 +76,52 @@ export async function storeUpload(file: File, folder: string, kind: UploadKind):
   if (file.size > MAX_UPLOAD_BYTES) throw new UploadError("Le fichier dépasse la taille maximale de 4 Mo.");
 
   const storagePath = `${folder}/${randomUUID()}.${extension}`;
-  const body = Buffer.from(await file.arrayBuffer());
-  const supabase = supabaseConfig();
+  await writeObject(storagePath, Buffer.from(await file.arrayBuffer()), file.type);
+  return storagePath;
+}
 
+/** Stores generated content (emails, documents) and returns its storage path. */
+export async function storeBuffer(
+  folder: string,
+  extension: string,
+  body: Buffer,
+  contentType: string,
+): Promise<string> {
+  const storagePath = `${folder}/${randomUUID()}.${extension}`;
+  await writeObject(storagePath, body, contentType);
+  return storagePath;
+}
+
+async function writeObject(storagePath: string, body: Buffer, contentType: string): Promise<void> {
+  const supabase = supabaseConfig();
   if (supabase) {
     const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.bucket}/${storagePath}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${supabase.key}`, "Content-Type": file.type, "x-upsert": "false" },
-      body,
+      headers: { Authorization: `Bearer ${supabase.key}`, "Content-Type": contentType, "x-upsert": "false" },
+      body: new Uint8Array(body),
     });
     if (!response.ok) throw new Error(`Supabase Storage upload failed: ${response.status} ${await response.text()}`);
-  } else {
-    const target = safeLocalPath(storagePath);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, body);
+    return;
   }
-  return storagePath;
+  const target = safeLocalPath(storagePath);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, body);
+}
+
+/** Deletes stored files; missing files are ignored. */
+export async function deleteStoredFiles(storagePaths: string[]): Promise<void> {
+  if (storagePaths.length === 0) return;
+  const supabase = supabaseConfig();
+  if (supabase) {
+    const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.bucket}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${supabase.key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: storagePaths }),
+    });
+    if (!response.ok) throw new Error(`Supabase Storage delete failed: ${response.status}`);
+    return;
+  }
+  await Promise.all(storagePaths.map((storagePath) => rm(safeLocalPath(storagePath), { force: true })));
 }
 
 export async function readStoredFile(storagePath: string): Promise<{ body: Buffer; contentType: string } | null> {

@@ -94,7 +94,7 @@ L'application ajoute en plus des contrôles côté serveur : paramètre `hd`, cl
 et email vérifié doivent tous correspondre à `ALLOWED_GOOGLE_DOMAIN`. Tout autre compte est redirigé vers une page
 « Accès refusé » qui explique la restriction.
 
-## 3. Envoi des emails via Gmail (à partir du lot 3)
+## 3. Envoi des emails via Gmail
 
 Les emails partent d'une adresse de l'entreprise (ex. `formation@entreprise.fr`) via l'API Gmail. Quota Workspace :
 environ 2 000 emails par jour et par compte. L'adresse d'envoi doit être une **boîte Gmail réelle** (compte utilisateur
@@ -118,7 +118,20 @@ avec licence) ; un groupe ou un alias ne peut pas être utilisé directement.
 **Alternative : jeton OAuth du compte expéditeur.** Créer un second client OAuth « Application de bureau », obtenir
 une seule fois un _refresh token_ pour le compte `formation@…` avec le champ `gmail.send`, et le stocker en variable
 d'environnement. Cette option évite la délégation au niveau du domaine, mais le jeton peut être révoqué, par exemple
-quand le mot de passe du compte change. Si vous la retenez, elle sera branchée au lot 3.
+quand le mot de passe du compte change. **Seule l'option « compte de service » est branchée dans l'application** : demandez
+l'alternative si vous la préférez.
+
+**Vérifier la configuration** : **Paramètres › Emails** indique le mode d'envoi actif. Inscrivez-vous à une session
+depuis le front : l'email apparaît dans **Derniers envois** (avec l'identifiant Gmail) et dans la boîte « Envoyés » de
+l'adresse expéditrice. Un envoi en échec est tracé avec son message d'erreur, sans bloquer l'inscription.
+
+**Sans Gmail** : en développement, chaque email (avec son fichier .ics) est conservé dans la boîte d'envoi locale
+(`.storage/boite-envoi/`) et consultable dans le back-office (onglet **Documents** d'une session, ou **Paramètres ›
+Emails**). En production sans Gmail, les envois sont tracés en échec.
+
+Emails envoyés automatiquement : inscription confirmée (avec .ics), placement en liste d'attente, place libérée, annulation
+de session (inscrits et formateurs). Les modèles sont modifiables dans **Paramètres › Emails**. À l'ajout depuis le
+back-office (et à l'import CSV), la case « Ne pas envoyer d'email » permet de rester silencieux.
 
 ## 4. Déploiement sur Vercel
 
@@ -136,9 +149,24 @@ quand le mot de passe du compte change. Si vous la retenez, elle sera branchée 
 
 - Tout nouveau compte du domaine reçoit le rôle **Collaborateur** à sa première connexion.
 - L'adresse `INITIAL_ADMIN_EMAIL` est (re)mise **Administrateur** à chaque connexion.
-- Le rôle **Formateur** sera attribué automatiquement quand une fiche formateur interne est liée au compte (lot 2).
+- Le rôle **Formateur** est attribué automatiquement quand une fiche formateur interne est liée au compte, et retiré
+  quand le lien disparaît.
 - Le rôle est stocké en base. Le proxy (`src/proxy.ts`) fait un premier contrôle, puis chaque page et chaque action
   revérifie le rôle en base côté serveur. Un compte désactivé (`active = false`) est déconnecté.
+
+## Données personnelles (RGPD)
+
+- **Droit d'accès** : **Entreprises › Tous les participants**, fiche du participant, **Exporter ses données** (fichier
+  JSON : identité, compte Google, inscriptions, émargements, évaluations, emails envoyés, historique).
+- **Effacement** : sur la même fiche, **Anonymiser** (saisie de « ANONYMISER » pour confirmer). Le nom, l'email, le
+  téléphone, la fonction, les motivations et les copies d'emails sont effacés, et les entrées du journal d'audit qui le
+  concernent sont neutralisées. Les inscriptions, émargements et attestations sont conservés sans identité jusqu'à la fin
+  de la durée de conservation. Pour un collaborateur, le compte est aussi anonymisé et désactivé : une nouvelle connexion
+  Google crée un nouveau compte vierge. Les administrateurs et les comptes liés à une fiche formateur doivent d'abord
+  être modifiés.
+- **Durée de conservation** : **Paramètres › Données personnelles** (5 ans par défaut). La page liste les participants
+  dont la dernière formation date de plus longtemps et permet de les anonymiser en une fois, ainsi que de supprimer les
+  fichiers de preuve expirés (signatures, documents générés). L'automatisation de ces purges est prévue au lot 4.
 
 ## Import CSV des participants externes
 

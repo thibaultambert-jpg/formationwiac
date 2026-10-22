@@ -71,6 +71,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   merge: "Fusion",
   role_change: "Changement de rôle",
   upload: "Téléversement",
+  anonymize: "Anonymisation",
+  export: "Export des données",
+  purge: "Purge des preuves",
 };
 
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {

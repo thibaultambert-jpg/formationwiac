@@ -421,6 +421,7 @@ model Document {
   enrollmentId   String?      @map("enrollment_id") @db.Uuid
   filePath       String?      @map("file_path")
   recipientEmail String?      @map("recipient_email")
+  subject        String?
   generatedAt    DateTime?    @map("generated_at") @db.Timestamptz
   sentAt         DateTime?    @map("sent_at") @db.Timestamptz
   gmailMessageId String?      @map("gmail_message_id")

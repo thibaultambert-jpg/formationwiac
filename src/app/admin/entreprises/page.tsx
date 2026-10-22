@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireRole } from "@/server/auth/guards";
+import { CompaniesTabs } from "./tabs";
 
 export const metadata: Metadata = { title: "Entreprises" };
 
@@ -68,6 +69,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
           </>
         }
       />
+      <CompaniesTabs />
       <FilterBar
         resetHref="/admin/entreprises"
         fields={[

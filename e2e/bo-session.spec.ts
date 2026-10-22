@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createTraining } from "./support/db";
+import { createTraining, emailsFor } from "./support/db";
 
 function isoDate(daysFromNow: number): string {
   const date = new Date();
@@ -106,4 +106,25 @@ test("the waitlist is used at capacity and promoted on cancellation", async ({ p
   await expect(page.getByRole("row").filter({ hasText: "Trois Troisième" })).toContainText("Confirmée");
   await expect(page.getByRole("row").filter({ hasText: "Un Premier" })).toContainText("Annulée");
   await expect(page.getByText("Complète", { exact: true })).toBeVisible();
+
+  // Emails: waitlist then promotion for the third participant.
+  await expect
+    .poll(async () => (await emailsFor(`trois.${stamp}@e2e.example`)).map((email) => email.type))
+    .toEqual(["waitlist_notice", "waitlist_promotion"]);
+
+  // Cancelling the session notifies the active enrollments.
+  await page.getByRole("link", { name: "Informations" }).click();
+  await page.getByRole("button", { name: "Annuler la session" }).click();
+  await page.getByRole("textbox", { name: "Motif de l'annulation" }).fill("Formateur indisponible");
+  await page.getByRole("button", { name: "Confirmer l'annulation" }).click();
+  await expect(page.getByText(/Session annulée le/)).toBeVisible();
+  await expect
+    .poll(async () => (await emailsFor(`deux.${stamp}@e2e.example`)).map((email) => email.type))
+    .toEqual(["enrollment_confirmation", "session_cancellation"]);
+  await page.getByRole("link", { name: "Documents" }).click();
+  await page
+    .getByRole("link", { name: /^Annulation :/ })
+    .first()
+    .click();
+  await expect(page.getByRole("region", { name: "Contenu de l'email" })).toContainText("est annulée");
 });

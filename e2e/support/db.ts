@@ -41,3 +41,34 @@ export async function createTraining(title: string) {
     return result.rows[0].id;
   });
 }
+
+/** Published session open to collaborators, one slot `daysFromNow` days ahead. */
+export async function createPublishedSession(
+  trainingId: string,
+  options: { capacity: number; daysFromNow: number; reference: string },
+) {
+  return withDb(async (client) => {
+    const session = await client.query<{ id: string }>(
+      `INSERT INTO sessions (id, training_id, reference, status, location, capacity_max, open_to_internal, open_to_external, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, 'published', 'Salle E2E', $3, true, true, now()) RETURNING id`,
+      [trainingId, options.reference, options.capacity],
+    );
+    await client.query(
+      `INSERT INTO session_slots (id, session_id, starts_at, ends_at)
+       VALUES (gen_random_uuid(), $1, date_trunc('day', now()) + make_interval(days => $2) + interval '8 hours',
+               date_trunc('day', now()) + make_interval(days => $2) + interval '11 hours 30 minutes')`,
+      [session.rows[0].id, options.daysFromNow],
+    );
+    return session.rows[0].id;
+  });
+}
+
+export async function emailsFor(email: string): Promise<{ type: string; subject: string }[]> {
+  return withDb(async (client) => {
+    const result = await client.query<{ type: string; subject: string }>(
+      `SELECT type, subject FROM documents WHERE recipient_email = $1 ORDER BY created_at`,
+      [email],
+    );
+    return result.rows;
+  });
+}

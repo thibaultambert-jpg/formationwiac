@@ -165,3 +165,21 @@ describe("French decimals", async () => {
     expect(formatEuros(null)).toBe("—");
   });
 });
+
+describe("GDPR retention", async () => {
+  const { anonymizedEmail, isRetentionExpired, retentionCutoff } = await import("@/server/domain/privacy");
+  const now = new Date("2026-10-22T10:00:00Z");
+
+  it("computes the cutoff N years back", () => {
+    expect(retentionCutoff(now, 5).toISOString()).toBe("2021-10-22T10:00:00.000Z");
+  });
+
+  it("expires activity older than the retention period only", () => {
+    expect(isRetentionExpired(new Date("2021-10-21T00:00:00Z"), now, 5)).toBe(true);
+    expect(isRetentionExpired(new Date("2021-10-23T00:00:00Z"), now, 5)).toBe(false);
+  });
+
+  it("builds a non-deliverable unique email", () => {
+    expect(anonymizedEmail("abc")).toBe("anonyme+abc@anonymise.invalid");
+  });
+});

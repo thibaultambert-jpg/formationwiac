@@ -4,12 +4,8 @@
 // are never overwritten.
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import {
-  PrismaClient,
-  type DocumentType,
-  type EvaluationType,
-  type QuestionAnswerType,
-} from "../src/generated/prisma/client";
+import { PrismaClient, type EvaluationType, type QuestionAnswerType } from "../src/generated/prisma/client";
+import { DEFAULT_EMAIL_TEMPLATES } from "../src/server/email/default-templates";
 
 const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL }),
@@ -21,59 +17,6 @@ const THEMES = [
   "Commercial",
   "Sécurité",
   "Efficacité professionnelle",
-];
-
-const EMAIL_TEMPLATES: { key: DocumentType; subject: string; body: string }[] = [
-  {
-    key: "enrollment_confirmation",
-    subject: "Confirmation d'inscription : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nVotre inscription à la formation « {{formation}} » est confirmée.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nVous trouverez en pièce jointe un fichier à ajouter à votre agenda.\n\nÀ bientôt,",
-  },
-  {
-    key: "waitlist_notice",
-    subject: "Liste d'attente : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nLa session de la formation « {{formation}} » ({{dates}}) est complète. Vous êtes inscrit(e) en liste d'attente et serez prévenu(e) par email si une place se libère.\n\nÀ bientôt,",
-  },
-  {
-    key: "waitlist_promotion",
-    subject: "Une place s'est libérée : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nUne place s'est libérée : votre inscription à la formation « {{formation}} » est désormais confirmée.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nÀ bientôt,",
-  },
-  {
-    key: "convocation",
-    subject: "Convocation : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nVeuillez trouver ci-joint votre convocation à la formation « {{formation}} » ainsi que son programme.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nÀ bientôt,",
-  },
-  {
-    key: "reminder",
-    subject: "Rappel : {{formation}} approche",
-    body: "Bonjour {{prenom}},\n\nNous vous rappelons que la formation « {{formation}} » aura lieu prochainement.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nÀ bientôt,",
-  },
-  {
-    key: "attendance_link",
-    subject: "Émargement : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nLa formation « {{formation}} » commence. Merci de signer la feuille d'émargement à l'aide de votre lien personnel :\n\n{{lien_emargement}}\n\nMerci,",
-  },
-  {
-    key: "evaluation_request",
-    subject: "Votre avis sur la formation {{formation}}",
-    body: "Bonjour {{prenom}},\n\nMerci d'avoir participé à la formation « {{formation}} ». Pouvez-vous prendre quelques minutes pour nous donner votre avis ?\n\n{{lien_evaluation}}\n\nMerci,",
-  },
-  {
-    key: "evaluation_reminder",
-    subject: "Rappel : votre avis sur la formation {{formation}}",
-    body: "Bonjour {{prenom}},\n\nVous n'avez pas encore répondu au questionnaire de la formation « {{formation}} ». Votre avis nous est précieux :\n\n{{lien_evaluation}}\n\nMerci,",
-  },
-  {
-    key: "certificate",
-    subject: "Attestation de fin de formation : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nVeuillez trouver ci-joint votre attestation de fin de formation « {{formation}} ».\n\nCordialement,",
-  },
-  {
-    key: "session_cancellation",
-    subject: "Annulation : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nNous sommes au regret de vous informer que la session de la formation « {{formation}} » prévue le {{dates}} est annulée.\n\nNous vous prions de nous excuser pour ce désagrément.\n\nCordialement,",
-  },
 ];
 
 type QuestionSeed = { label: string; answerType: QuestionAnswerType; options?: string[] };
@@ -141,7 +84,7 @@ async function main() {
     await db.theme.upsert({ where: { name }, update: {}, create: { name, position } });
   }
 
-  for (const template of EMAIL_TEMPLATES) {
+  for (const template of DEFAULT_EMAIL_TEMPLATES) {
     await db.emailTemplate.upsert({ where: { key: template.key }, update: {}, create: template });
   }
 

@@ -9,6 +9,8 @@ import { requireRole } from "@/server/auth/guards";
 import { SEAT_HOLDING_STATUSES } from "@/server/domain/capacity";
 import { canCancel, canDeleteSession, canPublish, canUnpublish } from "@/server/domain/session-status";
 import { errorState, formValues, isConfirmed, text, type ActionState } from "@/server/forms";
+import { after } from "next/server";
+import { notifySessionCancellation, promotionNotices, scheduleEnrollmentNotices } from "@/server/email/notifications";
 import { applyCapacityChange } from "@/server/services/enrollments";
 import {
   allocateReference,
@@ -84,6 +86,7 @@ export async function updateSession(_state: ActionState, formData: FormData): Pr
     if (warnings.length > 0) return { status: "warning", warnings, values: formValues(formData) };
   }
 
+  let promoted: string[] = [];
   try {
     await db.$transaction(async (tx) => {
       await updateSessionRecord(tx, existing.id, parsed.data);
@@ -100,12 +103,13 @@ export async function updateSession(_state: ActionState, formData: FormData): Pr
       const changes = diff(before, after);
       if (changes)
         await audit(tx, { userId: actor.id, action: "update", entity: "session", entityId: existing.id, ...changes });
-      await applyCapacityChange(tx, existing.id, actor.id);
+      promoted = await applyCapacityChange(tx, existing.id, actor.id);
     });
   } catch (error) {
     if (error instanceof SessionError) return errorState(formData, error.message);
     throw error;
   }
+  scheduleEnrollmentNotices(promotionNotices(promoted));
   redirect(`/admin/sessions/${existing.id}?modifie=1`);
 }
 
@@ -159,7 +163,7 @@ async function changeStatus(
   const id = text(formData, "id");
   const session = id ? await db.trainingSession.findUnique({ where: { id } }) : null;
   if (!session || !allowed(session.status)) return;
-  await db.$transaction(async (tx) => {
+  const promoted = await db.$transaction(async (tx) => {
     await tx.trainingSession.update({ where: { id: session.id }, data: { status } });
     await audit(tx, {
       userId: actor.id,
@@ -170,8 +174,9 @@ async function changeStatus(
       after: { status },
     });
     // A published session at capacity becomes full immediately.
-    if (status === "published") await applyCapacityChange(tx, session.id, actor.id);
+    return status === "published" ? applyCapacityChange(tx, session.id, actor.id) : [];
   });
+  scheduleEnrollmentNotices(promotionNotices(promoted));
   refresh();
 }
 
@@ -204,8 +209,18 @@ export async function cancelSession(_state: ActionState, formData: FormData): Pr
     before: { status: session.status },
     after: { status: "cancelled", reason },
   });
+  after(async () => {
+    try {
+      await notifySessionCancellation(session.id);
+    } catch (error) {
+      console.error("Cancellation emails failed", session.id, error);
+    }
+  });
   refresh();
-  return { status: "success", message: "La session a été annulée." };
+  return {
+    status: "success",
+    message: "La session a été annulée. Les inscrits et les formateurs sont prévenus par email.",
+  };
 }
 
 export async function deleteSession(formData: FormData): Promise<void> {
