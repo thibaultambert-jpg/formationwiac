@@ -29,7 +29,17 @@ by lot (section 11) and stops at the end of each lot for validation.
 - **Authorization is always checked server-side**: `src/proxy.ts` is only an optimistic check. Every page, layout,
   server action and route handler calls `requireUser()` / `requireRole([...])` from `src/server/auth/guards.ts`,
   which reads the role from the database.
-- Pure business rules live in `src/server/auth/policy.ts` and `src/server/domain/` and are unit tested.
+- Pure business rules live in `src/server/auth/policy.ts` and `src/server/domain/` and are unit tested. Database
+  logic shared by several screens lives in `src/server/services/` (enrollments, sessions, companies).
+- Enrollment changes always go through `src/server/services/enrollments.ts`: it locks the session row
+  (`SELECT … FOR UPDATE`), counts seats, promotes the waitlist and switches published/full automatically.
+- Forms: server actions with the signature `(state: ActionState, formData) => Promise<ActionState>` rendered with
+  `ActionForm` and the field components of `src/components/forms/`. Submitted values are echoed back on error.
+  Non-blocking warnings (trainer conflict, overlapping sessions, duplicate name) return `status: "warning"`; the form
+  is submitted again with `confirm=1`.
+- Files are stored through `src/server/storage.ts` (Supabase Storage, or `.storage/` in development) and always served
+  by the authenticated route `/fichiers/[...path]`.
+- Lists keep their filters in the URL (GET forms) so that CSV exports reuse them.
 - No physical deletion of records with history: archive (`archivedAt`) or anonymize (`anonymizedAt`).
 - Creations, updates and sends are written to `audit_logs`.
 - Environment variables are read through `getEnv()` (`src/lib/env.ts`); every new variable goes in `.env.example`.
@@ -43,14 +53,19 @@ by lot (section 11) and stops at the end of each lot for validation.
 | Dev server              | `pnpm dev`                                                |
 | Lint / format / types   | `pnpm lint`, `pnpm format`, `pnpm typecheck`              |
 | Unit tests (Vitest)     | `pnpm test`                                               |
+| Integration tests (DB)  | `pnpm test:integration` (needs `DATABASE_URL`)            |
 | E2E tests (Playwright)  | `pnpm build && pnpm test:e2e` (env vars must be exported) |
 | New migration (dev)     | `pnpm db:migrate --name <name>`                           |
 | Apply migrations (prod) | `pnpm db:deploy`                                          |
 | Seed (idempotent)       | `pnpm db:seed`                                            |
+| Demo data               | `pnpm db:seed:demo`                                       |
 | Prisma Studio           | `pnpm db:studio`                                          |
 
 Local database: any PostgreSQL 16, e.g.
 `DATABASE_URL=DIRECT_URL=postgresql://postgres:postgres@localhost:5432/formation_dev`.
+
+E2E tests sign in with session cookies generated in `e2e/global-setup.ts` (no Google, no backdoor in the app) and
+need a migrated database; they run the production build with `ALLOW_LOCAL_STORAGE=1`.
 
 Playwright is pinned to 1.56.1 to match the Chromium pre-installed in the Claude Code sandbox
 (`/opt/pw-browsers`); do not run `playwright install` there.

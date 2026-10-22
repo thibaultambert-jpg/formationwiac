@@ -12,6 +12,10 @@ const serverEnvSchema = z.object({
   INITIAL_ADMIN_EMAIL: z.email().transform((value) => value.trim().toLowerCase()),
   NEXTAUTH_SECRET: z.string().min(32),
   APP_URL: z.url(),
+  // Supabase Storage; when absent, files are stored on the local disk in development.
+  SUPABASE_URL: z.url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().min(1).default("documents"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -21,7 +25,9 @@ let cached: ServerEnv | undefined;
 // Validated lazily so that `next build` does not require runtime secrets.
 export function getEnv(): ServerEnv {
   if (!cached) {
-    const parsed = serverEnvSchema.safeParse(process.env);
+    // Empty strings (e.g. copied from .env.example) are treated as unset.
+    const source = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ""));
+    const parsed = serverEnvSchema.safeParse(source);
     if (!parsed.success) {
       const fields = parsed.error.issues.map((issue) => issue.path.join(".")).join(", ");
       throw new Error(`Invalid or missing environment variables: ${fields}`);

@@ -51,3 +51,5 @@ next-env.d.ts
 
 # env example is committed
 !.env.example
+/.storage
+/e2e/.auth

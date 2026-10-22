@@ -11,11 +11,15 @@ type NavLinkProps = {
   activeClassName?: string;
   /** When true, only the exact path is considered active. */
   exact?: boolean;
+  /** Other paths for which the link is also active. */
+  alsoActiveOn?: string[];
 };
 
-export function NavLink({ href, children, className, activeClassName, exact = false }: NavLinkProps) {
+export function NavLink({ href, children, className, activeClassName, exact = false, alsoActiveOn }: NavLinkProps) {
   const pathname = usePathname();
-  const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const isActive =
+    (exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)) ||
+    (alsoActiveOn ?? []).includes(pathname);
 
   return (
     <Link

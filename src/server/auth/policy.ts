@@ -69,3 +69,26 @@ export function decideAccess(pathname: string, role: Role | null): AccessDecisio
 export function hasRole(role: Role, allowed: readonly Role[]): boolean {
   return allowed.includes(role);
 }
+
+export type UserAdminCheck = { ok: true } | { ok: false; reason: string };
+
+/**
+ * An administrator cannot change their own role or deactivate themselves, and
+ * the initial admin account always stays an active administrator.
+ */
+export function checkUserAdministration(
+  actorId: string,
+  target: { id: string; email: string },
+  change: { role?: Role; active?: boolean },
+  initialAdminEmail: string,
+): UserAdminCheck {
+  if (actorId === target.id) {
+    return { ok: false, reason: "Vous ne pouvez pas modifier votre propre rôle ni désactiver votre compte." };
+  }
+  if (normalizeEmail(target.email) === normalizeEmail(initialAdminEmail)) {
+    if ((change.role && change.role !== "admin") || change.active === false) {
+      return { ok: false, reason: "Le compte administrateur initial reste toujours administrateur et actif." };
+    }
+  }
+  return { ok: true };
+}

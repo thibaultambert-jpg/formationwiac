@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decideAccess, isAllowedGoogleAccount, resolveRoleOnSignIn } from "@/server/auth/policy";
+import {
+  checkUserAdministration,
+  decideAccess,
+  isAllowedGoogleAccount,
+  resolveRoleOnSignIn,
+} from "@/server/auth/policy";
 
 const DOMAIN = "example.fr";
 
@@ -97,5 +102,26 @@ describe("decideAccess", () => {
   it("lets every signed-in user reach the front", () => {
     expect(decideAccess("/", "employee")).toBe("allow");
     expect(decideAccess("/mes-formations", "employee")).toBe("allow");
+  });
+});
+
+describe("checkUserAdministration", () => {
+  const initial = "admin@example.fr";
+
+  it("forbids changing one's own role or deactivating oneself", () => {
+    expect(checkUserAdministration("me", { id: "me", email: "x@example.fr" }, { role: "employee" }, initial).ok).toBe(
+      false,
+    );
+  });
+
+  it("protects the initial admin account", () => {
+    const target = { id: "a", email: "Admin@example.fr" };
+    expect(checkUserAdministration("me", target, { role: "trainer" }, initial).ok).toBe(false);
+    expect(checkUserAdministration("me", target, { active: false }, initial).ok).toBe(false);
+    expect(checkUserAdministration("me", target, { role: "admin" }, initial).ok).toBe(true);
+  });
+
+  it("allows other changes", () => {
+    expect(checkUserAdministration("me", { id: "b", email: "b@example.fr" }, { role: "admin" }, initial).ok).toBe(true);
   });
 });

@@ -19,6 +19,7 @@ pnpm install
 cp .env.example .env        # puis renseigner les valeurs (voir ci-dessous)
 pnpm db:migrate             # crée le schéma
 pnpm db:seed                # paramètres, thèmes, modèles d'emails, questionnaires
+pnpm db:seed:demo           # optionnel : formations, formateurs, entreprises et sessions de démonstration
 pnpm dev                    # http://localhost:3000
 ```
 
@@ -41,6 +42,7 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
 | `GOOGLE_SERVICE_ACCOUNT_KEY`                | Clé JSON du compte de service Gmail                          | 3   |
 | `GMAIL_SENDER_ADDRESS`                      | Adresse d'envoi (ex. `formation@entreprise.fr`)              | 3   |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase Storage (programmes, CV, signatures, documents)     | 2   |
+| `SUPABASE_STORAGE_BUCKET`                   | Nom du bucket privé (`documents` par défaut)                 | 2   |
 | `CRON_SECRET`                               | Protection des tâches planifiées (rappels, évaluations)      | 4   |
 
 ## 1. Base de données Supabase
@@ -57,6 +59,17 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
    ```
 4. La migration `enable_rls` active la Row Level Security sur toutes les tables, sans politique : l'API publique de
    Supabase (clé `anon`) ne peut rien lire. L'application accède à la base uniquement côté serveur, via Prisma.
+
+### Stockage des fichiers (Supabase Storage)
+
+1. **Storage › New bucket** : nom `documents` (ou la valeur de `SUPABASE_STORAGE_BUCKET`), **Public bucket décoché**.
+2. **Project Settings › API** : reporter l'URL du projet dans `SUPABASE_URL` et la clé `service_role` dans
+   `SUPABASE_SERVICE_ROLE_KEY`. Cette clé reste côté serveur et n'est jamais envoyée au navigateur.
+3. Les fichiers (programmes PDF, CV, logo, signature) sont toujours servis par l'application via `/fichiers/…`, après
+   vérification des droits : un lien direct vers Supabase n'est jamais exposé.
+
+En développement, si ces variables sont vides, les fichiers sont enregistrés dans le dossier local `.storage/` (ignoré
+par git). En production, l'absence de configuration provoque une erreur explicite au premier téléversement.
 
 ## 2. Client OAuth Google (connexion)
 
@@ -127,9 +140,30 @@ quand le mot de passe du compte change. Si vous la retenez, elle sera branchée 
 - Le rôle est stocké en base. Le proxy (`src/proxy.ts`) fait un premier contrôle, puis chaque page et chaque action
   revérifie le rôle en base côté serveur. Un compte désactivé (`active = false`) est déconnecté.
 
+## Import CSV des participants externes
+
+Depuis l'onglet **Inscrits** d'une session ouverte aux externes, bouton **Importer un CSV**. Un modèle est
+téléchargeable dans la fenêtre d'import (`/modele-import-participants.csv`).
+
+- Séparateur `;` (Excel en français) ou `,`, encodage UTF-8.
+- Colonnes obligatoires : `entreprise`, `prenom`, `nom`, `email`. Optionnelles : `siret`, `fonction`, `telephone`.
+  Les en-têtes sont reconnus sans tenir compte des accents ni de la casse (`Prénom`, `E-mail`, `Société`…).
+- Un contact existant est retrouvé par son email. Une entreprise existante est retrouvée par son SIRET, sinon par sa
+  raison sociale exacte. Sinon, l'entreprise et le contact sont créés.
+- Les lignes invalides sont ignorées et listées dans le compte rendu. Les autres sont inscrites selon la capacité :
+  confirmées, puis en liste d'attente une fois la session complète.
+
+Les exports CSV (sessions, inscrits d'une session, contacts externes) utilisent le séparateur `;` et un BOM UTF-8 pour
+s'ouvrir directement dans Excel.
+
 ## Tests
 
 ```bash
-pnpm test                  # tests unitaires (Vitest)
+pnpm test                    # tests unitaires (Vitest) : règles métier, CSV, dates, droits
+pnpm test:integration        # tests sur une vraie base PostgreSQL (DATABASE_URL) : capacité concurrente, liste d'attente
 pnpm build && pnpm test:e2e  # tests de bout en bout (Playwright), variables d'environnement exportées
 ```
+
+Les tests de bout en bout créent leurs propres comptes (`e2e-admin@<domaine>`, `e2e-collaborateur@<domaine>`) et des
+cookies de session signés avec `NEXTAUTH_SECRET`. Ils n'utilisent jamais Google et ne doivent être lancés que sur une
+base de développement ou de test.

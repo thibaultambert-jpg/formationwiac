@@ -1,20 +1,7 @@
-import type { Metadata } from "next";
-import { ComingSoon } from "@/components/layout/coming-soon";
-import { PageHeader } from "@/components/layout/page-header";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/guards";
 
-export const metadata: Metadata = { title: "Paramètres" };
-
-export default async function AdminSettingsPage() {
+export default async function SettingsIndexPage() {
   await requireRole(["admin"]);
-
-  return (
-    <>
-      <PageHeader
-        title="Paramètres"
-        description="Organisme, thèmes, modèles d'emails, questionnaires et utilisateurs."
-      />
-      <ComingSoon lot={2} />
-    </>
-  );
+  redirect("/admin/parametres/organisme");
 }
