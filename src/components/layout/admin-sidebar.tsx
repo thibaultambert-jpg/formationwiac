@@ -19,8 +19,8 @@ export function AdminSidebar() {
             <NavLink
               href={href}
               exact={"exact" in rest}
-              className="text-sidebar-foreground hover:bg-sidebar-accent focus-visible:ring-ring flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2"
-              activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+              className="text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-foreground flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-white"
+              activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-[inset_3px_0_0_var(--brand-green)]"
             >
               <Icon className="size-4" aria-hidden="true" />
               {label}

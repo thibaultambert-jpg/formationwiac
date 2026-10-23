@@ -3,37 +3,48 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn/ui theme tokens. Colors are chosen to meet WCAG AA contrast. */
+/*
+ * WiAcademy brand theme (shadcn/ui tokens). Brand colors come from the official
+ * logo: violet #451dc7 and green #04f06a. The green is decorative only (lines,
+ * markers, text on violet): it is not readable as text on a light background.
+ * Every text/background pair meets WCAG AA contrast.
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.45 0.16 262);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.95 0.02 262);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.55 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.45 0.16 262);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-accent: oklch(0.95 0.02 262);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --radius: 0.75rem;
+  --brand: #451dc7;
+  --brand-dark: #2c1191;
+  --brand-green: #04f06a;
+  --background: #f8f7fd;
+  --foreground: #1c1240;
+  --card: #ffffff;
+  --card-foreground: #1c1240;
+  --popover: #ffffff;
+  --popover-foreground: #1c1240;
+  --primary: #451dc7;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeafb;
+  --secondary-foreground: #2c1191;
+  --muted: #f1eefb;
+  --muted-foreground: #5b5677;
+  --accent: #ebe6fb;
+  --accent-foreground: #2c1191;
+  --destructive: #c62828;
+  --border: #e2ddf3;
+  --input: #d6d0ec;
+  --ring: #451dc7;
+  --sidebar: #2c1191;
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: rgb(255 255 255 / 0.12);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3a1fa8;
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-green: var(--brand-green);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -69,5 +80,10 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
   }
 }

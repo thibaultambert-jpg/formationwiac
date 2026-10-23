@@ -3,7 +3,6 @@ import Link from "next/link";
 import { CalendarDays, Clock, MapPin } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterBar, param } from "@/components/layout/filter-bar";
-import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { formatDate, formatMonth, toParisDateInput } from "@/lib/dates";
@@ -40,10 +39,18 @@ export default async function CatalogPage({ searchParams }: PageProps<"/">) {
 
   return (
     <>
-      <PageHeader
-        title="Catalogue des formations"
-        description="Les formations ouvertes aux collaborateurs, avec leurs prochaines sessions."
-      />
+      <section className="bg-brand-dark relative mb-8 overflow-hidden rounded-2xl px-6 py-10 text-white sm:px-10">
+        <div
+          aria-hidden="true"
+          className="bg-primary absolute -top-24 -right-16 size-72 rounded-full opacity-70 blur-2xl"
+        />
+        <div className="relative max-w-2xl space-y-3">
+          <p className="text-brand-green text-sm font-semibold tracking-widest uppercase">WiAcademy</p>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Catalogue des formations</h1>
+          <span aria-hidden="true" className="bg-brand-green block h-1 w-16 rounded-full" />
+          <p className="text-white/85">Les formations ouvertes aux collaborateurs, avec leurs prochaines sessions.</p>
+        </div>
+      </section>
       <FilterBar
         resetHref="/"
         fields={[

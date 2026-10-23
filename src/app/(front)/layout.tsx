@@ -1,4 +1,5 @@
 import { FrontHeader } from "@/components/layout/front-header";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { requireUser } from "@/server/auth/guards";
 
 export default async function FrontLayout({ children }: LayoutProps<"/">) {
@@ -7,9 +8,10 @@ export default async function FrontLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <FrontHeader user={user} />
-      <main id="contenu" className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      <main id="contenu" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         {children}
       </main>
+      <SiteFooter />
     </>
   );
 }

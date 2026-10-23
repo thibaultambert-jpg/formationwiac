@@ -22,6 +22,10 @@ by lot (section 11) and stops at the end of each lot for validation.
 
 - Code, identifiers and comments in **English**; every user-facing text in **French**. URLs are French
   (`/admin/formations`, `/mes-formations`).
+- Brand: WiAcademy by Wavestone. Colors are tokens in `src/app/globals.css` (violet `--brand` #451dc7 as primary,
+  `--brand-dark`, green `--brand-green` #04f06a for decorative lines/markers only, never as text on a light
+  background). The logo is the `Logo` component (`src/components/brand/logo.tsx`, `currentColor` wordmark); font
+  Plus Jakarta Sans.
 - Dates displayed as JJ/MM/AAAA in Europe/Paris: always use `src/lib/dates.ts`.
 - Database: models PascalCase, tables/columns snake_case via `@@map`/`@map`, UUIDv7 ids, `Timestamptz` dates.
   The training session model is `TrainingSession` (table `sessions`).
