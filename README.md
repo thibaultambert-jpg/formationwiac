@@ -49,10 +49,13 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
 
 1. Créer un projet sur [supabase.com](https://supabase.com) dans une région de l'UE (de préférence
    **West EU (Paris)**, `eu-west-3`, la même zone que Vercel `cdg1`).
-2. Dans **Project Settings › Database › Connection string** :
+2. Bouton **Connect** (en haut du projet) › **Connection String**, en remplaçant `[YOUR-PASSWORD]` par le mot de
+   passe de la base (réinitialisable dans **Database › Settings**) :
    - **Transaction pooler** (port 6543) → `DATABASE_URL` ;
-   - **Session pooler** (port 5432) ou connexion directe → `DIRECT_URL`.
-3. Depuis un poste disposant de ces deux variables, appliquer le schéma et le seed :
+   - **Session pooler** (port 5432) → `DIRECT_URL` (la connexion directe `db.….supabase.co` n'est joignable qu'en
+     IPv6, ce que Vercel ne permet pas).
+3. Sur Vercel, le build de production applique les migrations et le seed (voir « Déploiement sur Vercel »). Depuis un
+   poste disposant de ces deux variables, on peut aussi les lancer à la main :
    ```bash
    pnpm db:deploy
    pnpm db:seed
@@ -63,9 +66,11 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
 ### Stockage des fichiers (Supabase Storage)
 
 1. **Storage › New bucket** : nom `documents` (ou la valeur de `SUPABASE_STORAGE_BUCKET`), **Public bucket décoché**.
-2. **Project Settings › API** : reporter l'URL du projet dans `SUPABASE_URL` et la clé `service_role` dans
-   `SUPABASE_SERVICE_ROLE_KEY`. Cette clé reste côté serveur et n'est jamais envoyée au navigateur.
-3. Les fichiers (programmes PDF, CV, logo, signature) sont toujours servis par l'application via `/fichiers/…`, après
+2. **Project Settings › Data API** : reporter l'URL du projet (`https://<ref>.supabase.co`) dans `SUPABASE_URL`.
+3. **Project Settings › API Keys** : reporter une clé secrète dans `SUPABASE_SERVICE_ROLE_KEY`, soit une **Secret key**
+   (`sb_secret_…`), soit la clé `service_role` de l'onglet **Legacy API Keys**. Cette clé reste côté serveur et n'est
+   jamais envoyée au navigateur.
+4. Les fichiers (programmes PDF, CV, logo, signature) sont toujours servis par l'application via `/fichiers/…`, après
    vérification des droits : un lien direct vers Supabase n'est jamais exposé.
 
 En développement, si ces variables sont vides, les fichiers sont enregistrés dans le dossier local `.storage/` (ignoré
@@ -139,9 +144,12 @@ back-office (et à l'import CSV), la case « Ne pas envoyer d'email » permet de
    pnpm sont détectés automatiquement. `vercel.json` fixe la région des fonctions à `cdg1` (Paris).
 2. **Settings › Environment Variables** : saisir les variables du lot 1 (tableau ci-dessus) pour l'environnement
    _Production_, avec `APP_URL` égale à l'URL de production.
-3. Déployer. La commande de build (`pnpm build`) génère le client Prisma puis construit l'application.
-4. Les migrations ne sont **pas** appliquées automatiquement au déploiement : avant de déployer une version qui en
-   contient, lancer `pnpm db:deploy` avec `DIRECT_URL` pointant vers la base de production.
+3. Déployer. La commande de build (`pnpm build:vercel`, fixée dans `vercel.json`) applique, en production uniquement,
+   les migrations (`pnpm db:deploy`) et le seed idempotent (`pnpm db:seed`) sur la base désignée par `DIRECT_URL`,
+   puis génère le client Prisma et construit l'application. Une migration en échec fait échouer le déploiement : la
+   version en ligne reste alors inchangée.
+4. Les déploiements _Preview_ ne touchent jamais à la base : sans variables de base pour cet environnement, ils
+   construisent l'application sans pouvoir s'en servir.
 5. Optionnel : **Settings › Domains** pour un domaine personnalisé ; le reporter ensuite dans le client OAuth Google et
    dans `APP_URL`.
 
