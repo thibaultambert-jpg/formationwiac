@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createTraining, emailsFor, ensureOrganizationIdentifiers } from "./support/db";
+import { createTraining, emailsFor } from "./support/db";
 
 function isoDate(daysFromNow: number): string {
   const date = new Date();
@@ -66,7 +66,6 @@ test("create a 2-day session and enroll 3 externals of a new company", async ({ 
   await expect(page.getByText("3 / 10 places occupées")).toBeVisible();
 
   // One agreement for the company, generated as a PDF, then recorded as signed.
-  await ensureOrganizationIdentifiers();
   await page.getByRole("link", { name: "Conventions" }).click();
   const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: companyName }) });
   await card.getByRole("button", { name: "Générer la convention" }).click();

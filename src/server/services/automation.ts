@@ -18,7 +18,12 @@ import {
   PrivacyError,
   purgeProofFiles,
 } from "@/server/services/privacy";
-import { closeSession, sendAttendanceLinks, sendEvaluationRequests } from "@/server/services/session-documents";
+import {
+  closeSession,
+  sendAttendanceLinks,
+  sendCertificates,
+  sendEvaluationRequests,
+} from "@/server/services/session-documents";
 import { issueToken } from "@/server/tokens";
 import { getEnv } from "@/lib/env";
 
@@ -146,6 +151,21 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
       report.closedSessions++;
       report.certificates += result.certificates.sent;
       report.hotEvaluations += result.evaluations.sent;
+    }
+  });
+
+  // Certificates held at closure (missing SIRET or NDA for externals, B1): sent
+  // as soon as possible; the dedup keys prevent any double send.
+  await step(report, "Attestations en attente", async () => {
+    const held = await db.trainingSession.findMany({
+      where: {
+        status: "completed",
+        enrollments: { some: { status: "present", documents: { none: { type: "certificate" } } } },
+      },
+      select: { id: true },
+    });
+    for (const session of held) {
+      report.certificates += (await sendCertificates(session.id, { automatic: true, actorId })).sent;
     }
   });
 
