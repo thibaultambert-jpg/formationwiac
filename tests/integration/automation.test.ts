@@ -1,31 +1,52 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runScheduledTasks } from "@/server/services/automation";
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const paris = (iso: string) => new Date(iso); // ISO strings below carry the Paris offset (+01:00 in January)
 
+let previousIdentifiers: { siret: string | null; activityDeclarationNumber: string | null } | null = null;
+
+// Certificates of external trainees require the SIRET and the NDA (B1).
+async function setIdentifiers(values: { siret: string | null; activityDeclarationNumber: string | null }) {
+  await db.organizationSettings.upsert({
+    where: { id: 1 },
+    update: values,
+    create: { id: 1, name: "Organisme test", ...values },
+  });
+}
+
+beforeAll(async () => {
+  const settings = await db.organizationSettings.findUnique({ where: { id: 1 } });
+  previousIdentifiers = settings
+    ? { siret: settings.siret, activityDeclarationNumber: settings.activityDeclarationNumber }
+    : null;
+  await setIdentifiers({ siret: "12345678901234", activityDeclarationNumber: "11755555575" });
+});
+
 afterAll(async () => {
+  if (previousIdentifiers) await db.organizationSettings.update({ where: { id: 1 }, data: previousIdentifiers });
   await db.$disconnect();
 });
 
-async function fixture() {
+async function fixture(suffix = "") {
+  const key = `${stamp}${suffix}`;
   const training = await db.training.create({
     data: {
-      title: `Auto ${stamp}`,
-      slug: `auto-${stamp}`,
+      title: `Auto ${key}`,
+      slug: `auto-${key}`,
       objectives: "Objectifs",
       durationHours: 7,
       modality: "in_person",
     },
   });
   const trainer = await db.trainer.create({
-    data: { type: "external", firstName: "Tom", lastName: "Formateur", email: `tom-${stamp}@test.example` },
+    data: { type: "external", firstName: "Tom", lastName: "Formateur", email: `tom-${key}@test.example` },
   });
   const session = await db.trainingSession.create({
     data: {
       trainingId: training.id,
-      reference: `AUTO-${stamp}`,
+      reference: `AUTO-${key}`,
       status: "published",
       capacityMax: 5,
       location: "Salle",
@@ -39,7 +60,7 @@ async function fixture() {
     },
     include: { slots: { orderBy: { startsAt: "asc" } } },
   });
-  const company = await db.company.create({ data: { name: `Auto ${stamp}` } });
+  const company = await db.company.create({ data: { name: `Auto ${key}` } });
   const [present, absent] = await Promise.all(
     ["present", "absent"].map((name) =>
       db.participant.create({
@@ -48,7 +69,7 @@ async function fixture() {
           companyId: company.id,
           firstName: name,
           lastName: "Auto",
-          email: `${name}-${stamp}@test.example`,
+          email: `${name}-${key}@test.example`,
         },
       }),
     ),
@@ -56,7 +77,13 @@ async function fixture() {
   const enrollments = await Promise.all(
     [present, absent].map((participant) =>
       db.enrollment.create({
-        data: { sessionId: session.id, participantId: participant.id, status: "confirmed", source: "back_office" },
+        data: {
+          sessionId: session.id,
+          participantId: participant.id,
+          status: "confirmed",
+          source: "back_office",
+          participantType: participant.type,
+        },
       }),
     ),
   );
@@ -114,5 +141,22 @@ describe("scheduled tasks", () => {
     await runScheduledTasks(paris("2031-03-16T07:00:00+01:00"));
     expect(await sends(session.id, "evaluation_request")).toBe(2);
     expect(await db.evaluation.count({ where: { enrollmentId: enrollments[0].id } })).toBe(2);
+  }, 60_000);
+
+  it("holds the certificates of externals until the SIRET and the NDA are set (B1)", async () => {
+    const { session, enrollments } = await fixture("-b1");
+    await db.attendance.create({
+      data: { enrollmentId: enrollments[0].id, slotId: session.slots[0].id, present: true, signedAt: new Date() },
+    });
+    await setIdentifiers({ siret: null, activityDeclarationNumber: null });
+    try {
+      await runScheduledTasks(paris("2031-01-14T17:30:00+01:00"));
+      expect((await db.trainingSession.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("completed");
+      expect(await sends(session.id, "certificate")).toBe(0);
+    } finally {
+      await setIdentifiers({ siret: "12345678901234", activityDeclarationNumber: "11755555575" });
+    }
+    await runScheduledTasks(paris("2031-01-15T07:00:00+01:00"));
+    expect(await sends(session.id, "certificate")).toBe(2);
   }, 60_000);
 });

@@ -15,6 +15,10 @@ export const TEMPLATE_VARIABLES = {
   lien_evaluation: "Lien vers le questionnaire d'évaluation",
   inscrits: "Liste des inscrits (email formateur)",
   organisme: "Nom de l'organisme",
+  acces: "Accès et informations pratiques de la session",
+  a_prevoir: "Matériel ou documents à prévoir",
+  entreprise: "Entreprise cliente (convention)",
+  reference_convention: "Référence de la convention",
 } as const;
 
 export type TemplateVariables = Partial<Record<keyof typeof TEMPLATE_VARIABLES | string, string>>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRightLeft, Building2, Pencil, Upload, UserPlus } from "lucide-react";
+import { ArrowRightLeft, Building2, FileCheck2, Pencil, Upload, UserPlus } from "lucide-react";
 import { ActionForm, SubmitButton } from "@/components/forms/action-form";
 import { CheckboxField, FileField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
 import { SearchPicker } from "@/components/forms/search-picker";
@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ENROLLMENT_STATUS_LABELS } from "@/lib/labels";
+import { ENROLLMENT_STATUS_LABELS, FUNDING_TYPE_LABELS } from "@/lib/labels";
 import { CompanyFields, ContactFields } from "@/app/admin/entreprises/company-fields";
 import type { ActionState } from "@/server/forms";
 import { searchCompanies, searchExternalParticipants, searchUsers, type SearchOption } from "@/server/search";
@@ -24,7 +24,10 @@ import {
   importExternalCsv,
   moveEnrollmentAction,
   updateEnrollmentAction,
+  waiveAgreementAction,
 } from "./actions";
+
+const FUNDING_OPTIONS = Object.entries(FUNDING_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
 export function AddInternalDialog({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
@@ -234,6 +237,17 @@ export function AddExternalDialog({ sessionId, disabled }: { sessionId: string; 
             )}
           </section>
 
+          <SelectField
+            name="fundingType"
+            label="Financement"
+            defaultValue="company"
+            options={FUNDING_OPTIONS}
+            hint="OPCO, CPF, France Travail ou Région : la session entre dans le périmètre Qualiopi."
+          />
+          <p className="text-muted-foreground text-sm">
+            L&apos;inscription reste « En attente de convention » jusqu&apos;à la signature de la convention de
+            formation (onglet Conventions) ou une dérogation motivée.
+          </p>
           <CheckboxField name="silent" label="Ne pas envoyer d'email au participant" />
           <div className="flex flex-wrap gap-2">
             <SubmitButton>Inscrire</SubmitButton>
@@ -294,6 +308,7 @@ export function EditEnrollmentDialog({
     name: string;
     status: string;
     external: boolean;
+    fundingType: string;
     appliedPrice: string | undefined;
     billingCompany: SearchOption | null;
     cancellationReason: string | null;
@@ -324,6 +339,12 @@ export function EditEnrollmentDialog({
             label="Motif d'annulation"
             defaultValue={enrollment.cancellationReason}
             rows={2}
+          />
+          <SelectField
+            name="fundingType"
+            label="Financement"
+            defaultValue={enrollment.fundingType}
+            options={FUNDING_OPTIONS}
           />
           {enrollment.external ? (
             <>
@@ -381,6 +402,35 @@ export function MoveEnrollmentDialog({
             options={targets.map((target) => ({ value: target.id, label: target.label }))}
           />
           <SubmitButton>Déplacer</SubmitButton>
+        </ActionForm>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Admin waiver of the training agreement (B2): the reason is mandatory and traced. */
+export function WaiveAgreementDialog({ enrollment }: { enrollment: { id: string; name: string } }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <FileCheck2 aria-hidden="true" />
+          Déroger
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmer sans convention</DialogTitle>
+          <DialogDescription>
+            L&apos;inscription de {enrollment.name} sera confirmée sans convention signée. La dérogation et son motif
+            sont conservés dans l&apos;historique et repris dans le dossier de la session.
+          </DialogDescription>
+        </DialogHeader>
+        <ActionForm action={waiveAgreementAction} hideSuccess onSuccess={() => setOpen(false)}>
+          <input type="hidden" name="enrollmentId" value={enrollment.id} />
+          <TextareaField name="reason" label="Motif de la dérogation" required rows={3} />
+          <SubmitButton>Confirmer avec dérogation</SubmitButton>
         </ActionForm>
       </DialogContent>
     </Dialog>

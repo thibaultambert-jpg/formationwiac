@@ -178,6 +178,28 @@ Mise en place :
    à chaud partent alors au plus tard une heure après l'échéance, au lieu du lendemain matin. Les règles sont écrites pour
    fonctionner avec les deux fréquences.
 
+## Conventions de formation (participants externes)
+
+Une inscription externe réserve sa place avec le statut **« En attente de convention »**. Elle devient **Confirmée**
+quand la convention de formation de son entreprise est enregistrée comme signée, ou quand un administrateur saisit une
+**dérogation motivée** (bouton « Déroger » de l'onglet Inscrits, tracée dans l'historique).
+
+Onglet **Conventions** de la session :
+
+1. **Générer la convention** : PDF conforme aux articles L6353-1 et suivants (parties, objet et nature de l'action,
+   dates, durée, lieu, stagiaires, prix, dédit), qui couvre toutes les inscriptions de l'entreprise sans convention. Le
+   SIRET et le numéro de déclaration d'activité doivent être renseignés dans **Paramètres › Organisme**.
+2. **Envoyer par email** à l'email de facturation de l'entreprise (ou à son contact principal).
+3. **Convention signée** : téléverser l'exemplaire signé et sa date ; les participants reçoivent alors leur
+   confirmation d'inscription.
+
+Chaque inscription porte un **type** (interne ou externe, figé à l'inscription) et un **financement** (plan interne,
+fonds propres, OPCO, CPF, France Travail, Région, autre). Une session est dans le **périmètre Qualiopi** si elle est
+cochée comme telle ou si une inscription est financée par des fonds publics ou mutualisés ; l'onglet **Conformité**
+liste alors les obligations de chaque stagiaire, bloquantes pour les externes et pour les sessions du périmètre.
+
+Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour revenir en arrière.
+
 ## Émargement, évaluations et preuves
 
 - **Participants** : lien personnel reçu par email, valable jusqu'au lendemain de la fin de la session. Chaque

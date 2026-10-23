@@ -13,7 +13,7 @@ async function addExternal(page: Page, contact: { firstName: string; lastName: s
   await dialog.getByRole("textbox", { name: "Nom", exact: true }).fill(contact.lastName);
   await dialog.getByRole("textbox", { name: "Email", exact: true }).fill(contact.email);
   await dialog.getByRole("button", { name: "Inscrire" }).click();
-  await expect(dialog.getByText(`${contact.firstName} ${contact.lastName} est inscrit(e).`)).toBeVisible();
+  await expect(dialog.getByText(`${contact.firstName} ${contact.lastName} est inscrit(e), en attente`)).toBeVisible();
 }
 
 // Lot 2 acceptance criterion: an admin creates a 2-day session and enrolls 3
@@ -61,8 +61,34 @@ test("create a 2-day session and enroll 3 externals of a new company", async ({ 
   expect(page.url()).toBe(sessionUrl);
   const rows = page.getByRole("row").filter({ hasText: companyName });
   await expect(rows).toHaveCount(3);
-  await expect(rows.filter({ hasText: "Confirmée" })).toHaveCount(3);
+  // External enrollments hold their seat until the training agreement is signed (B2).
+  await expect(rows.filter({ hasText: "En attente de convention" })).toHaveCount(3);
   await expect(page.getByText("3 / 10 places occupées")).toBeVisible();
+
+  // One agreement for the company, generated as a PDF, then recorded as signed.
+  await page.getByRole("link", { name: "Conventions" }).click();
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: companyName }) });
+  await card.getByRole("button", { name: "Générer la convention" }).click();
+  const create = page.getByRole("dialog", { name: `Convention avec ${companyName}` });
+  await create.getByRole("textbox", { name: "Conditions financières" }).fill("Paiement à 30 jours.");
+  await create.getByRole("button", { name: "Générer le PDF" }).click();
+  await expect(card.getByText(/CONV-\d{4}-\d{3}/)).toHaveCount(4);
+  await expect(card.getByText("Brouillon", { exact: true })).toBeVisible();
+
+  await card.getByRole("button", { name: "Convention signée" }).click();
+  const signed = page.getByRole("dialog", { name: /Enregistrer la convention signée/ });
+  await signed.getByLabel("Convention signée (PDF)").setInputFiles("e2e/fixtures/programme.pdf");
+  await signed.getByLabel("Date de signature").fill(isoDate(0));
+  await signed.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(card.getByText("Signée", { exact: true })).toBeVisible();
+  await expect(card.getByText("Confirmée")).toHaveCount(3);
+
+  await page.getByRole("link", { name: /Inscrits/ }).click();
+  await expect(page.getByRole("row").filter({ hasText: companyName }).filter({ hasText: "Confirmée" })).toHaveCount(3);
+  // The trainees are notified once their enrollment is confirmed.
+  await expect
+    .poll(async () => (await emailsFor(`ines.${stamp}@e2e.example`)).map((email) => email.type))
+    .toEqual(["enrollment_confirmation"]);
 });
 
 test("the waitlist is used at capacity and promoted on cancellation", async ({ page }) => {
@@ -103,14 +129,15 @@ test("the waitlist is used at capacity and promoted on cancellation", async ({ p
   await edit.getByRole("textbox", { name: "Motif d'annulation" }).fill("Empêchement");
   await edit.getByRole("button", { name: "Enregistrer" }).click();
 
-  await expect(page.getByRole("row").filter({ hasText: "Trois Troisième" })).toContainText("Confirmée");
+  // An external promoted from the waitlist still needs its training agreement.
+  await expect(page.getByRole("row").filter({ hasText: "Trois Troisième" })).toContainText("En attente de convention");
   await expect(page.getByRole("row").filter({ hasText: "Un Premier" })).toContainText("Annulée");
   await expect(page.getByText("Complète", { exact: true })).toBeVisible();
 
-  // Emails: waitlist then promotion for the third participant.
+  // Emails: the waitlist notice; the confirmation waits for the agreement.
   await expect
     .poll(async () => (await emailsFor(`trois.${stamp}@e2e.example`)).map((email) => email.type))
-    .toEqual(["waitlist_notice", "waitlist_promotion"]);
+    .toEqual(["waitlist_notice"]);
 
   // Cancelling the session notifies the active enrollments.
   await page.getByRole("link", { name: "Informations" }).click();
@@ -120,7 +147,7 @@ test("the waitlist is used at capacity and promoted on cancellation", async ({ p
   await expect(page.getByText(/Session annulée le/)).toBeVisible();
   await expect
     .poll(async () => (await emailsFor(`deux.${stamp}@e2e.example`)).map((email) => email.type))
-    .toEqual(["enrollment_confirmation", "session_cancellation"]);
+    .toEqual(["session_cancellation"]);
   await page.getByRole("link", { name: "Documents" }).click();
   await page
     .getByRole("link", { name: /^Annulation :/ })

@@ -29,7 +29,8 @@ type SessionForEmail = {
   reference: string;
   location: string | null;
   videoLink: string | null;
-  training: { title: string };
+  accessInfo?: string | null;
+  training: { title: string; thingsToBring?: string | null };
   slots: { id: string; startsAt: Date; endsAt: Date }[];
 };
 
@@ -47,6 +48,8 @@ export async function sessionVariables(session: SessionForEmail): Promise<Templa
     dates: slotLines(session),
     lieu: session.location ?? "—",
     lien_visio: session.videoLink ?? "—",
+    acces: session.accessInfo ?? "—",
+    a_prevoir: session.training.thingsToBring ?? "—",
     organisme: organization?.name ?? "",
     lien_espace: `${getEnv().APP_URL.replace(/\/$/, "")}/mes-formations`,
   };
@@ -81,6 +84,8 @@ export async function notifyEnrollment(enrollmentId: string, notice: EnrollmentN
     include: { participant: true, session: { include: sessionInclude } },
   });
   if (!enrollment || enrollment.participant.anonymizedAt) return;
+  // Pending its training agreement: the trainee is notified once it is confirmed.
+  if (enrollment.status === "pending_agreement") return;
 
   const template = await loadTemplate(NOTICE_TEMPLATES[notice]);
   const variables = {
@@ -114,7 +119,10 @@ export async function notifySessionCancellation(sessionId: string): Promise<void
     where: { id: sessionId },
     include: {
       ...sessionInclude,
-      enrollments: { where: { status: { in: ["confirmed", "waitlisted"] } }, include: { participant: true } },
+      enrollments: {
+        where: { status: { in: ["confirmed", "pending_agreement", "waitlisted"] } },
+        include: { participant: true },
+      },
       trainers: { include: { trainer: true } },
     },
   });

@@ -1,6 +1,8 @@
 import "server-only";
 import { Document, Image, Page, renderToBuffer, Text, View } from "@react-pdf/renderer";
 import { formatDate, formatTime, formatWeekday } from "@/lib/dates";
+import { MODALITY_LABELS } from "@/lib/labels";
+import { ACTION_NATURE } from "@/server/domain/compliance";
 import { formatDecimal } from "@/server/domain/numbers";
 import { totalHours } from "@/server/domain/slots";
 import type { SessionDocuments } from "@/server/pdf/data";
@@ -48,6 +50,12 @@ export async function renderConvocation(documents: SessionDocuments, enrollment:
         <Text>Durée totale : {formatDecimal(totalHours(session.slots))} heures</Text>
         <Text style={styles.h2}>Lieu</Text>
         <Text>{place(session)}</Text>
+        {session.accessInfo ? (
+          <>
+            <Text style={styles.h2}>Accès et informations pratiques</Text>
+            <Text>{session.accessInfo}</Text>
+          </>
+        ) : null}
         {trainers ? (
           <>
             <Text style={styles.h2}>Formateur{session.trainers.length > 1 ? "s" : ""}</Text>
@@ -56,6 +64,12 @@ export async function renderConvocation(documents: SessionDocuments, enrollment:
         ) : null}
         <Text style={styles.h2}>Prérequis</Text>
         <Text>{session.training.prerequisites ?? "Aucun prérequis."}</Text>
+        {session.training.thingsToBring ? (
+          <>
+            <Text style={styles.h2}>Matériel ou documents à prévoir</Text>
+            <Text>{session.training.thingsToBring}</Text>
+          </>
+        ) : null}
         <Text style={styles.h2}>Contact</Text>
         <Text>
           {organization.name}
@@ -183,6 +197,9 @@ export async function renderCertificate(documents: SessionDocuments, enrollment:
           {first && last ? `du ${formatDate(first.startsAt)} au ${formatDate(last.endsAt)}` : ""} ({session.reference}),
           pour une durée suivie de <Text style={styles.bold}>{formatDecimal(totalHours(attended))} heures</Text> sur{" "}
           {formatDecimal(totalHours(session.slots))} heures prévues.
+        </Text>
+        <Text style={{ marginTop: 6 }}>
+          Nature de l&apos;action : {ACTION_NATURE}. Modalité : {MODALITY_LABELS[session.training.modality]}.
         </Text>
         <Text style={styles.h2}>Objectifs de la formation</Text>
         <Text>{session.training.objectives}</Text>

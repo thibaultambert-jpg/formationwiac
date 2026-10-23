@@ -199,6 +199,12 @@ async function main() {
         participantId,
         status,
         source: "back_office",
+        participantType: "external",
+        fundingType: "company",
+        // Demo data: the agreement is waived so that external enrollments are confirmed.
+        ...(status === "confirmed"
+          ? { agreementWaiverReason: "Données de démonstration", agreementWaivedAt: new Date() }
+          : {}),
         appliedPrice: price,
         billingCompanyId: companyId,
         enrolledAt: new Date(Date.now() - minutes * 60_000),

@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/dates";
-import { ENROLLMENT_SOURCE_LABELS, ENROLLMENT_STATUS_LABELS, PARTICIPANT_TYPE_LABELS } from "@/lib/labels";
+import {
+  ENROLLMENT_SOURCE_LABELS,
+  ENROLLMENT_STATUS_LABELS,
+  FUNDING_TYPE_LABELS,
+  PARTICIPANT_TYPE_LABELS,
+} from "@/lib/labels";
 import { getCurrentUser } from "@/server/auth/guards";
 import { toCsv } from "@/server/domain/csv";
 import { csvResponse } from "@/server/csv-response";
@@ -15,7 +20,11 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
     include: {
       training: true,
       enrollments: {
-        include: { participant: { include: { company: true, user: true } }, billingCompany: true },
+        include: {
+          participant: { include: { company: true, user: true } },
+          billingCompany: true,
+          convention: { select: { reference: true } },
+        },
         orderBy: { enrolledAt: "asc" },
       },
     },
@@ -36,6 +45,9 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
       "Fonction",
       "Téléphone",
       "Statut",
+      "Financement",
+      "Convention",
+      "Dérogation",
       "Source",
       "Inscrit le",
       "Prix appliqué HT",
@@ -50,13 +62,16 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
         participant.firstName,
         participant.lastName,
         participant.email,
-        PARTICIPANT_TYPE_LABELS[participant.type],
+        PARTICIPANT_TYPE_LABELS[enrollment.participantType],
         participant.user?.department,
         participant.company?.name,
         participant.company?.siret,
         participant.jobTitle,
         participant.phone,
         ENROLLMENT_STATUS_LABELS[enrollment.status],
+        FUNDING_TYPE_LABELS[enrollment.fundingType],
+        enrollment.convention?.reference,
+        enrollment.agreementWaiverReason,
         ENROLLMENT_SOURCE_LABELS[enrollment.source],
         formatDate(enrollment.enrolledAt),
         enrollment.appliedPrice?.toString().replace(".", ","),

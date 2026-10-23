@@ -44,10 +44,31 @@ enum ParticipantType {
 
 enum EnrollmentStatus {
   confirmed
+  // External enrollment holding a seat until its training agreement is signed
+  // (or an admin waives it with a reason).
+  pending_agreement
   waitlisted
   cancelled
   present
   absent
+}
+
+// How the training is paid for (BPF breakdown, Qualiopi scope).
+enum FundingType {
+  none // internal training plan
+  company // client company's own funds
+  opco
+  cpf
+  france_travail
+  region
+  other
+}
+
+enum ConventionStatus {
+  draft
+  sent
+  signed
+  cancelled
 }
 
 enum EnrollmentSource {
@@ -84,6 +105,7 @@ enum QuestionAnswerType {
 enum DocumentType {
   // PDF documents
   convocation
+  convention
   attendance_sheet
   certificate
   program
@@ -150,6 +172,7 @@ model Training {
   durationHours  Decimal          @map("duration_hours") @db.Decimal(5, 1)
   modality       TrainingModality
   priceExclTax   Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
+  thingsToBring  String?          @map("things_to_bring") @db.Text
   active         Boolean          @default(true)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
@@ -199,6 +222,10 @@ model TrainingSession {
   registrationDeadline DateTime?     @map("registration_deadline") @db.Timestamptz
   openToInternal       Boolean       @default(true) @map("open_to_internal")
   openToExternal       Boolean       @default(false) @map("open_to_external")
+  // Funded by public or pooled funds (OPCO, CPF, France Travail, Region):
+  // Qualiopi obligations become blocking.
+  qualiopiScope        Boolean       @default(false) @map("qualiopi_scope")
+  accessInfo           String?       @map("access_info") @db.Text
   internalNotes        String?       @map("internal_notes") @db.Text
   cancelledAt          DateTime?     @map("cancelled_at") @db.Timestamptz
   cancellationReason   String?       @map("cancellation_reason")
@@ -211,6 +238,7 @@ model TrainingSession {
   enrollments  Enrollment[]
   documents    Document[]
   accessTokens AccessToken[]
+  conventions  Convention[]
 
   @@index([trainingId])
   @@index([status])
@@ -267,6 +295,7 @@ model Company {
   billedEnrollments Enrollment[]
   mergedInto        Company?      @relation("CompanyMerge", fields: [mergedIntoId], references: [id])
   mergedCompanies   Company[]     @relation("CompanyMerge")
+  conventions       Convention[]
 
   @@index([name])
   @@map("companies")
@@ -301,23 +330,33 @@ model Participant {
 // ───────────── Enrollments and follow-up ─────────────
 
 model Enrollment {
-  id                 String           @id @default(uuid(7)) @db.Uuid
-  sessionId          String           @map("session_id") @db.Uuid
-  participantId      String           @map("participant_id") @db.Uuid
-  status             EnrollmentStatus
-  source             EnrollmentSource
-  enrolledById       String?          @map("enrolled_by_id") @db.Uuid
+  id                    String           @id @default(uuid(7)) @db.Uuid
+  sessionId             String           @map("session_id") @db.Uuid
+  participantId         String           @map("participant_id") @db.Uuid
+  status                EnrollmentStatus
+  // Frozen at enrollment time, so that a later change of the participant does
+  // not rewrite history.
+  participantType       ParticipantType  @map("participant_type")
+  fundingType           FundingType      @default(none) @map("funding_type")
+  source                EnrollmentSource
+  enrolledById          String?          @map("enrolled_by_id") @db.Uuid
   // Billing fields kept for the future invoicing tool, no logic in V1.
-  appliedPrice       Decimal?         @map("applied_price") @db.Decimal(10, 2)
-  billingCompanyId   String?          @map("billing_company_id") @db.Uuid
-  enrolledAt         DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
-  motivation         String?          @db.Text
-  cancelledAt        DateTime?        @map("cancelled_at") @db.Timestamptz
-  cancellationReason String?          @map("cancellation_reason")
-  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  appliedPrice          Decimal?         @map("applied_price") @db.Decimal(10, 2)
+  billingCompanyId      String?          @map("billing_company_id") @db.Uuid
+  enrolledAt            DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
+  motivation            String?          @db.Text
+  cancelledAt           DateTime?        @map("cancelled_at") @db.Timestamptz
+  cancellationReason    String?          @map("cancellation_reason")
+  conventionId          String?          @map("convention_id") @db.Uuid
+  // Admin waiver of the training agreement (B2), with a mandatory reason.
+  agreementWaiverReason String?          @map("agreement_waiver_reason")
+  agreementWaivedAt     DateTime?        @map("agreement_waived_at") @db.Timestamptz
+  agreementWaivedById   String?          @map("agreement_waived_by_id") @db.Uuid
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   session        TrainingSession @relation(fields: [sessionId], references: [id])
   participant    Participant     @relation(fields: [participantId], references: [id])
+  convention     Convention?     @relation(fields: [conventionId], references: [id])
   enrolledBy     User?           @relation("EnrolledBy", fields: [enrolledById], references: [id])
   billingCompany Company?        @relation(fields: [billingCompanyId], references: [id])
   attendances    Attendance[]
@@ -329,7 +368,37 @@ model Enrollment {
   // Waitlist order: first waitlisted by enrolledAt.
   @@index([sessionId, status, enrolledAt])
   @@index([participantId])
+  @@index([conventionId])
   @@map("enrollments")
+}
+
+// Training agreement (convention de formation) between the organization and a
+// client company for one session. The PDF is generated by the app; the signed
+// copy is uploaded. Signing confirms the linked pending enrollments.
+model Convention {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  reference      String           @unique // e.g. CONV-2026-001
+  sessionId      String           @map("session_id") @db.Uuid
+  companyId      String           @map("company_id") @db.Uuid
+  status         ConventionStatus @default(draft)
+  priceExclTax   Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
+  financialTerms String?          @map("financial_terms") @db.Text
+  generatedPath  String?          @map("generated_path")
+  generatedAt    DateTime?        @map("generated_at") @db.Timestamptz
+  sentAt         DateTime?        @map("sent_at") @db.Timestamptz
+  signedPath     String?          @map("signed_path")
+  signedAt       DateTime?        @map("signed_at") @db.Timestamptz
+  cancelledAt    DateTime?        @map("cancelled_at") @db.Timestamptz
+  createdById    String?          @map("created_by_id") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  session     TrainingSession @relation(fields: [sessionId], references: [id])
+  company     Company         @relation(fields: [companyId], references: [id])
+  enrollments Enrollment[]
+
+  @@index([sessionId, companyId])
+  @@map("conventions")
 }
 
 model Attendance {

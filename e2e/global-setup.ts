@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { encode } from "next-auth/jwt";
-import { upsertUser } from "./support/db";
+import { ensureOrganizationIdentifiers, upsertUser } from "./support/db";
 
 // Creates the test accounts and signed session cookies (same format as
 // Auth.js), so that tests run without going through Google.
@@ -36,6 +36,8 @@ export default async function globalSetup() {
   const domain = process.env.ALLOWED_GOOGLE_DOMAIN ?? "example.fr";
   const adminEmail = `e2e-admin@${domain}`;
   const employeeEmail = `e2e-collaborateur@${domain}`;
+  // Documents sent to externals require the SIRET and the NDA (B1).
+  await ensureOrganizationIdentifiers();
   const adminId = await upsertUser(adminEmail, "admin", "Alice", "Admin");
   const employeeId = await upsertUser(employeeEmail, "employee", "Claude", "Collaborateur");
 

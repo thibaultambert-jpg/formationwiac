@@ -49,6 +49,12 @@ by lot (section 11) and stops at the end of each lot for validation.
   `sendEmail()` (traced in `documents`, never throws) and schedule notices with `after()` via
   `scheduleEnrollmentNotices()` once the transaction is committed. Without Gmail, emails go to the local outbox
   (`.storage/boite-envoi/`) in development.
+- Compliance (audit `AUDIT_RESULTAT.md`): rules in `src/server/domain/compliance.ts` (Qualiopi scope, funding,
+  per-enrollment requirements, blocking for externals and Qualiopi sessions only). An external enrollment takes the
+  seat as `pending_agreement` until its training agreement (`Convention`, `src/server/services/conventions.ts`, PDF in
+  `src/server/pdf/convention.tsx`) is signed or an admin waives it with a reason. `Enrollment.participantType` is
+  frozen at enrollment time. Documents for externals require the SIRET and the NDA.
+- Every migration ships a `down.sql` next to its `migration.sql` (reversible, never deletes existing records).
 - Front enrollment rules (visibility, deadline, unenrollment) are in `src/server/domain/front-enrollment.ts`; overlapping
   sessions are blocking on the front and only a warning in the BO.
 - GDPR: `src/server/services/privacy.ts` (export, anonymization keeping proofs, retention period).

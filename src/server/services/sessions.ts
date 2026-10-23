@@ -31,6 +31,8 @@ export type SessionInput = {
   registrationDeadline: Date | null;
   openToInternal: boolean;
   openToExternal: boolean;
+  qualiopiScope: boolean;
+  accessInfo: string | null;
   internalNotes: string | null;
   trainerIds: string[];
   slots: SlotInput[];
@@ -45,6 +47,8 @@ const baseSchema = z
     capacityMin: z.number().int("Nombre entier attendu.").min(0).nullable(),
     openToInternal: z.boolean(),
     openToExternal: z.boolean(),
+    qualiopiScope: z.boolean(),
+    accessInfo: z.string().nullable(),
     internalNotes: z.string().nullable(),
     trainerIds: z.array(z.uuid()),
   })
@@ -80,6 +84,8 @@ export function parseSessionForm(
     capacityMin: optionalInt(text(formData, "capacityMin")),
     openToInternal: checkbox(formData, "openToInternal"),
     openToExternal: checkbox(formData, "openToExternal"),
+    qualiopiScope: checkbox(formData, "qualiopiScope"),
+    accessInfo: text(formData, "accessInfo"),
     internalNotes: text(formData, "internalNotes"),
     trainerIds: formData
       .getAll("trainerIds")
@@ -171,6 +177,8 @@ export function sessionData(input: SessionInput) {
     registrationDeadline: input.registrationDeadline,
     openToInternal: input.openToInternal,
     openToExternal: input.openToExternal,
+    qualiopiScope: input.qualiopiScope,
+    accessInfo: input.accessInfo,
     internalNotes: input.internalNotes,
   };
 }

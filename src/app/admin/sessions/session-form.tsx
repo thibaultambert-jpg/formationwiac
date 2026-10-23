@@ -22,6 +22,8 @@ export type SessionFormValues = {
   registrationDeadline: string | null;
   openToInternal: boolean;
   openToExternal: boolean;
+  qualiopiScope: boolean;
+  accessInfo: string | null;
   internalNotes: string | null;
   trainerIds: string[];
   slots: SlotRow[];
@@ -119,7 +121,21 @@ export function SessionForm({ action, session, defaultTrainingId, trainings, tra
           />
         </div>
         <FieldMessage name="openToInternal" />
+        <CheckboxField
+          name="qualiopiScope"
+          label="Périmètre Qualiopi"
+          hint="Session financée par des fonds publics ou mutualisés (OPCO, CPF, France Travail, Région) : les obligations Qualiopi deviennent bloquantes."
+          defaultChecked={session?.qualiopiScope ?? false}
+        />
       </section>
+
+      <TextareaField
+        name="accessInfo"
+        label="Accès et informations pratiques"
+        hint="Repris dans la convocation : accès, salle, stationnement, code d'entrée…"
+        defaultValue={session?.accessInfo}
+        rows={3}
+      />
 
       <TrainersPicker trainers={trainers} initial={session?.trainerIds ?? []} />
 

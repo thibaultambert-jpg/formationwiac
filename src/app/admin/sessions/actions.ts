@@ -136,6 +136,8 @@ export async function duplicateSession(formData: FormData): Promise<void> {
         registrationDeadline: source.registrationDeadline,
         openToInternal: source.openToInternal,
         openToExternal: source.openToExternal,
+        qualiopiScope: source.qualiopiScope,
+        accessInfo: source.accessInfo,
         internalNotes: source.internalNotes,
         slots: { create: source.slots.map(({ startsAt, endsAt }) => ({ startsAt, endsAt })) },
         trainers: { create: source.trainers.map(({ trainerId }) => ({ trainerId })) },
