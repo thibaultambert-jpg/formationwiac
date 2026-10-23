@@ -15,7 +15,13 @@ const ANSWER_TYPES = [
 export function DelaysForm({
   settings,
 }: {
-  settings: { reminderDaysBefore: number; coldEvaluationDays: number; evaluationReminderDays: number };
+  settings: {
+    reminderDaysBefore: number;
+    coldEvaluationDays: number;
+    evaluationReminderDays: number;
+    attendanceMarginBefore: number;
+    attendanceMarginAfter: number;
+  };
 }) {
   return (
     <ActionForm action={saveDelays} className="grid max-w-3xl gap-4 space-y-0 sm:grid-cols-3 sm:items-end">
@@ -39,6 +45,20 @@ export function DelaysForm({
         type="number"
         min={1}
         defaultValue={settings.evaluationReminderDays}
+      />
+      <TextField
+        name="attendanceMarginBefore"
+        label="Lien d'émargement : ouvert avant (min)"
+        type="number"
+        min={0}
+        defaultValue={settings.attendanceMarginBefore}
+      />
+      <TextField
+        name="attendanceMarginAfter"
+        label="Lien d'émargement : valable après la fin (min)"
+        type="number"
+        min={0}
+        defaultValue={settings.attendanceMarginAfter}
       />
       <SubmitButton className="sm:col-span-3 sm:w-fit">Enregistrer les délais</SubmitButton>
     </ActionForm>

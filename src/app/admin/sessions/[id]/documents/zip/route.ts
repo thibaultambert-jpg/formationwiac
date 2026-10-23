@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { renderCertificate } from "@/server/pdf/documents";
 import { answersCsv, sessionEvaluations, summaryCsv } from "@/server/services/evaluation-summary";
 import { attendanceSheet, pdfFilename } from "@/server/services/session-documents";
+import { readStoredFile } from "@/server/storage";
 
 // Proofs of a session in one ZIP (lot 4 acceptance criterion): signed attendance
 // sheet, evaluations (answers and synthesis) and certificates.
@@ -19,9 +20,17 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
   const files: Record<string, Uint8Array> = {
     [`emargement/${pdfFilename("emargement", documents)}`]: new Uint8Array(pdf),
   };
+  // Documents are frozen (I2): the certificate sent is the one archived; it is
+  // generated only when none was stored yet.
+  const stored = await db.document.findMany({
+    where: { sessionId: id, type: "certificate", filePath: { endsWith: ".pdf" } },
+    orderBy: { createdAt: "desc" },
+  });
   for (const enrollment of documents.session.enrollments.filter((item) => item.status === "present")) {
+    const archived = stored.find((document) => document.enrollmentId === enrollment.id);
+    const file = archived?.filePath ? await readStoredFile(archived.filePath) : null;
     files[`attestations/${pdfFilename("attestation", documents, enrollment)}`] = new Uint8Array(
-      await renderCertificate(documents, enrollment),
+      file ? file.body : await renderCertificate(documents, enrollment),
     );
   }
   const evaluations = await Promise.all([sessionEvaluations(id, "hot"), sessionEvaluations(id, "cold")]);

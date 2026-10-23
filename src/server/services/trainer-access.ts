@@ -3,7 +3,14 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/server/auth/guards";
 import { resolveToken } from "@/server/tokens";
 
-export type TrainerAccess = { sessionId: string; trainerId: string; actorId: string | null; token: string | null };
+export type TrainerAccess = {
+  sessionId: string;
+  trainerId: string;
+  actorId: string | null;
+  token: string | null;
+  /** Access token record, kept in the attendance proof log (C6). */
+  tokenId: string | null;
+};
 
 /**
  * A trainer acts on a session either through their personal link (token) or
@@ -16,7 +23,13 @@ export async function resolveTrainerAccess(input: {
   if (input.token) {
     const record = await resolveToken(input.token, ["trainer_attendance"]);
     if (!record?.sessionId || !record.trainerId) return null;
-    return { sessionId: record.sessionId, trainerId: record.trainerId, actorId: null, token: input.token };
+    return {
+      sessionId: record.sessionId,
+      trainerId: record.trainerId,
+      actorId: null,
+      token: input.token,
+      tokenId: record.id,
+    };
   }
   if (!input.sessionId) return null;
   const user = await getCurrentUser();
@@ -26,5 +39,7 @@ export async function resolveTrainerAccess(input: {
   const link = await db.sessionTrainer.findUnique({
     where: { sessionId_trainerId: { sessionId: input.sessionId, trainerId: trainer.id } },
   });
-  return link ? { sessionId: input.sessionId, trainerId: trainer.id, actorId: user.id, token: null } : null;
+  return link
+    ? { sessionId: input.sessionId, trainerId: trainer.id, actorId: user.id, token: null, tokenId: null }
+    : null;
 }

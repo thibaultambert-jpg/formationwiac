@@ -54,6 +54,12 @@ by lot (section 11) and stops at the end of each lot for validation.
   seat as `pending_agreement` until its training agreement (`Convention`, `src/server/services/conventions.ts`, PDF in
   `src/server/pdf/convention.tsx`) is signed or an admin waives it with a reason. `Enrollment.participantType` is
   frozen at enrollment time. Documents for externals require the SIRET and the NDA.
+- Attendance is probative and **append-only** (`src/server/services/attendance.ts`, rules in
+  `src/server/domain/attendance-proof.ts`): `attendances` and `trainer_signatures` rows are never updated or deleted
+  (PostgreSQL triggers), corrections are appended to `attendance_corrections` with a reason, and the state of a slot is
+  computed (latest correction, else signature). Read the grid with `loadAttendanceGrid()`. Participant links are one
+  token per slot, single use, valid around the slot. Only the retention purge may rewrite them, through
+  `withRetentionPurge()` (`src/server/retention.ts`). The final attendance sheet is frozen at closure with its SHA-256.
 - Every migration ships a `down.sql` next to its `migration.sql` (reversible, never deletes existing records).
 - Front enrollment rules (visibility, deadline, unenrollment) are in `src/server/domain/front-enrollment.ts`; overlapping
   sessions are blocking on the front and only a warning in the BO.
@@ -62,7 +68,8 @@ by lot (section 11) and stops at the end of each lot for validation.
   `src/server/services/automation.ts` (cron `/api/cron`, protected by `CRON_SECRET`). Every automatic email has a
   `dedupKey` (unique on `documents`), claimed before sending, so the job can run hourly or daily and twice safely.
 - Token links (attendance, evaluation, trainer) go through `src/server/tokens.ts` (random 256-bit token, only the
-  SHA-256 hash is stored, with an expiry); their pages live in `src/app/(public)/` and are public in the proxy.
+  SHA-256 hash is stored, with an expiry; attendance links also have `validFrom`, `slotId` and `consumedAt`, resolved
+  by `resolveAttendanceLink()`); their pages live in `src/app/(public)/` and are public in the proxy.
 - PDFs: `src/server/pdf/` (no `lineHeight` on `<Page>`: it hides the fixed footer). Session documents and sends:
   `src/server/services/session-documents.ts`.
 - A client component that shows the result of an action must stay mounted after `refresh()`: when the action changes

@@ -1,8 +1,10 @@
 import "server-only";
 import type { DocumentType, EvaluationType } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { formatSlot, formatWeekday, toParisDateInput } from "@/lib/dates";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
+import { attended, linkWindow, sha256, slotAttendance } from "@/server/domain/attendance-proof";
 import { presenceAtClosure } from "@/server/domain/automation";
 import { missingOrganizationIdentifiers } from "@/server/domain/compliance";
 import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
@@ -13,6 +15,7 @@ import { renderTemplate } from "@/server/email/template";
 import { loadSessionDocuments, type SessionDocuments } from "@/server/pdf/data";
 import { renderAttendanceSheet, renderCertificate, renderConvocation } from "@/server/pdf/documents";
 import { readStoredFile, storeBuffer } from "@/server/storage";
+import { attendanceMargins } from "@/server/services/attendance";
 import { issueToken } from "@/server/tokens";
 
 const DAY = 24 * 3_600_000;
@@ -152,13 +155,37 @@ export async function sendAttendanceLinks(
   const trainerMail = await template("trainer_attendance_link");
   const enrollments = activeEnrollments(documents, ["confirmed", "present"]);
 
+  // One single-use link per slot, valid only around that slot (C2): the slots of
+  // the day for automatic sends, the slots not over yet for manual sends.
+  const margins = await attendanceMargins();
+  const now = new Date();
+  const slots = session.slots.filter((slot) =>
+    options.day
+      ? toParisDateInput(slot.startsAt) === options.day
+      : linkWindow(slot, margins).expiresAt.getTime() > now.getTime(),
+  );
+  if (slots.length === 0) return report;
+
   for (const enrollment of enrollments) {
-    const token = await issueToken(db, { purpose: "attendance", enrollmentId: enrollment.id, expiresAt });
+    const lines: string[] = [];
+    for (const slot of slots) {
+      const window = linkWindow(slot, margins);
+      const token = await issueToken(db, {
+        purpose: "attendance",
+        enrollmentId: enrollment.id,
+        slotId: slot.id,
+        validFrom: window.validFrom,
+        expiresAt: window.expiresAt,
+      });
+      lines.push(
+        `- ${formatWeekday(slot.startsAt)} ${formatSlot(slot.startsAt, slot.endsAt)} : ${appUrl(`/emargement/${token}`)}`,
+      );
+    }
     const variables = {
       ...common,
       prenom: enrollment.participant.firstName,
       nom: enrollment.participant.lastName,
-      lien_emargement: appUrl(`/emargement/${token}`),
+      lien_emargement: lines.join("\n"),
     };
     count(
       report,
@@ -334,7 +361,8 @@ export async function closeSession(sessionId: string, actorId: string | null) {
   const session = await db.trainingSession.findUniqueOrThrow({
     where: { id: sessionId },
     include: {
-      enrollments: { where: { status: "confirmed" }, include: { attendances: { where: { present: true } } } },
+      slots: true,
+      enrollments: { where: { status: "confirmed" }, include: { attendances: true, corrections: true } },
     },
   });
   if (session.status !== "published" && session.status !== "full" && session.status !== "draft") return null;
@@ -342,7 +370,15 @@ export async function closeSession(sessionId: string, actorId: string | null) {
   await db.$transaction(async (tx) => {
     await tx.trainingSession.update({ where: { id: sessionId }, data: { status: "completed" } });
     for (const enrollment of session.enrollments) {
-      const status = presenceAtClosure(enrollment.attendances.length);
+      const attendedSlots = session.slots.filter((slot) =>
+        attended(
+          slotAttendance({
+            attendance: enrollment.attendances.find((item) => item.slotId === slot.id) ?? null,
+            corrections: enrollment.corrections.filter((item) => item.slotId === slot.id),
+          }).state,
+        ),
+      ).length;
+      const status = presenceAtClosure(attendedSlots);
       await tx.enrollment.update({ where: { id: enrollment.id }, data: { status } });
       await audit(tx, {
         userId: actorId,
@@ -362,13 +398,40 @@ export async function closeSession(sessionId: string, actorId: string | null) {
       after: { status: "completed" },
     });
   });
+  await freezeAttendanceSheet(sessionId);
   const certificates = await sendCertificates(sessionId, { automatic: true, actorId });
   const evaluations = await sendEvaluationRequests(sessionId, "hot", { automatic: true, actorId });
   return { certificates, evaluations };
 }
 
-/** Attendance sheet PDF, regenerated on demand. */
+/**
+ * Freezes the final attendance sheet of a closed session (C7, I2): the PDF is
+ * stored with its SHA-256 and served as is. A later signature or correction
+ * stores a new version; previous versions are kept.
+ */
+export async function freezeAttendanceSheet(sessionId: string) {
+  const documents = await requireDocuments(sessionId);
+  const pdf = await renderAttendanceSheet(documents, { final: true });
+  const filePath = await storeBuffer(`documents/${sessionId}`, "pdf", pdf, "application/pdf");
+  return db.document.create({
+    data: { type: "attendance_sheet", sessionId, filePath, generatedAt: new Date(), sha256: sha256(pdf) },
+  });
+}
+
+/** Attendance sheet: the frozen final version once the session is closed, a provisional one before. */
 export async function attendanceSheet(sessionId: string) {
   const documents = await requireDocuments(sessionId);
-  return { documents, pdf: await renderAttendanceSheet(documents) };
+  if (documents.session.status === "completed") {
+    const frozen = await db.document.findFirst({
+      where: { sessionId, type: "attendance_sheet", sha256: { not: null }, filePath: { not: null } },
+      orderBy: { createdAt: "desc" },
+    });
+    const file = frozen?.filePath ? await readStoredFile(frozen.filePath) : null;
+    if (file) return { documents, pdf: file.body, sha256: frozen!.sha256, final: true };
+    const created = await freezeAttendanceSheet(sessionId);
+    const stored = await readStoredFile(created.filePath!);
+    return { documents, pdf: stored!.body, sha256: created.sha256, final: true };
+  }
+  const pdf = await renderAttendanceSheet(documents, { final: false });
+  return { documents, pdf, sha256: sha256(pdf), final: false };
 }

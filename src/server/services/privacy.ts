@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
+import { withRetentionPurge } from "@/server/retention";
 import { normalizeEmail } from "@/server/auth/policy";
 import { ANONYMIZED_FIRST_NAME, ANONYMIZED_LAST_NAME, anonymizedEmail, retentionCutoff } from "@/server/domain/privacy";
 import { EMAIL_DOCUMENT_TYPES } from "@/server/email/default-templates";
@@ -31,6 +32,7 @@ export async function exportParticipantData(participantId: string) {
         include: {
           session: { include: { training: { select: { title: true } }, slots: { orderBy: { startsAt: "asc" } } } },
           attendances: { include: { slot: true } },
+          corrections: { include: { slot: true } },
           evaluations: true,
           documents: { select: { type: true, subject: true, recipientEmail: true, sentAt: true, generatedAt: true } },
         },
@@ -79,7 +81,17 @@ export async function exportParticipantData(participantId: string) {
         slot: attendance.slot.startsAt,
         present: attendance.present,
         signedAt: attendance.signedAt,
+        method: attendance.method,
         ipAddress: attendance.ipAddress,
+        userAgent: attendance.userAgent,
+        recordHash: attendance.recordHash,
+      })),
+      attendanceCorrections: enrollment.corrections.map((correction) => ({
+        slot: correction.slot.startsAt,
+        state: correction.state,
+        eventAt: correction.eventAt,
+        reason: correction.reason,
+        createdAt: correction.createdAt,
       })),
       evaluations: enrollment.evaluations.map((evaluation) => ({
         type: evaluation.type,
@@ -234,14 +246,17 @@ export async function purgeProofFiles(now: Date, years: number, actorId: string 
     ...files.documents.map((row) => row.filePath!),
     ...files.signatures.map((row) => row.signaturePath),
   ]);
-  await db.$transaction([
-    db.attendance.updateMany({
+  await withRetentionPurge(async (tx) => {
+    await tx.attendance.updateMany({
       where: { id: { in: files.attendances.map((row) => row.id) } },
       data: { signaturePath: null },
-    }),
-    db.document.updateMany({ where: { id: { in: files.documents.map((row) => row.id) } }, data: { filePath: null } }),
-    db.trainerSignature.deleteMany({ where: { id: { in: files.signatures.map((row) => row.id) } } }),
-  ]);
+    });
+    await tx.document.updateMany({
+      where: { id: { in: files.documents.map((row) => row.id) } },
+      data: { filePath: null },
+    });
+    await tx.trainerSignature.deleteMany({ where: { id: { in: files.signatures.map((row) => row.id) } } });
+  });
   await audit(db, {
     userId: actorId,
     action: "purge",

@@ -116,3 +116,17 @@ export const CONVENTION_STATUS_TONES: Record<keyof typeof CONVENTION_STATUS_LABE
   signed: "success",
   cancelled: "secondary",
 };
+
+export const ATTENDANCE_STATE_LABELS = {
+  present: "Présent(e)",
+  absent: "Absent(e)",
+  late: "Retard",
+  left_early: "Départ anticipé",
+  unknown: "Non signé",
+} as const;
+
+export const SIGNATURE_METHOD_LABELS: Record<string, string> = {
+  participant_link: "lien personnel",
+  trainer_device: "appareil du formateur",
+  attestation_checkbox: "attestation (case à cocher)",
+};

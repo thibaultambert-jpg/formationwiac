@@ -202,19 +202,29 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
 
 ## Émargement, évaluations et preuves
 
-- **Participants** : lien personnel reçu par email, valable jusqu'au lendemain de la fin de la session. Chaque
-  demi-journée se signe le jour même, de 30 minutes avant son début jusqu'à 23:59 (signature au doigt ou au stylet, ou
-  nom saisi au clavier). L'horodatage, l'adresse IP et la méthode sont enregistrés.
+- **Participants** : un **lien personnel par demi-journée**, envoyé le matin de chaque journée (ou depuis l'onglet
+  **Émargement**). Il n'est utilisable qu'**une fois** et seulement autour du créneau (par défaut de 30 minutes avant
+  le début à 60 minutes après la fin, réglable dans **Paramètres › Évaluations et rappels**). Le participant signe au
+  doigt, au stylet ou en saisissant son nom, ou **certifie sa présence par une case à cocher** (alternative accessible).
+  Un lien expiré, inconnu ou déjà utilisé affiche un message neutre.
 - **Formateurs** : les formateurs internes signent depuis **Mes sessions**, les externes depuis leur lien personnel.
-  Dans les deux cas, ils peuvent aussi **faire signer les participants sur leur appareil** (mode tablette).
-- **Corrections** : l'onglet **Émargement** de la session permet de marquer un participant présent ou absent. La
-  correction est tracée et la présence est recalculée si la session est déjà clôturée.
+  Ils peuvent **faire signer les participants sur leur appareil** pendant le créneau et **déclarer une absence, un
+  retard ou un départ anticipé** avec son motif.
+- **Preuve** : chaque signature conserve l'horodatage serveur (heure de Paris à l'affichage), le jeton utilisé,
+  l'adresse IP, le navigateur et une **empreinte SHA-256** (participant, session, créneau, horodatage, image). Les
+  émargements sont en **ajout seul** : des triggers PostgreSQL refusent toute modification ou suppression, y compris
+  par un administrateur ; seule la purge RGPD automatique peut effacer les données techniques.
+- **Corrections** : l'onglet **Émargement** permet d'ajouter une correction (présent sans signature, absent, retard,
+  départ anticipé) avec un motif obligatoire ; elle s'ajoute à l'historique, la signature n'est jamais modifiée.
+- **Feuille d'émargement** : provisoire pendant la session, **figée à la clôture** (PDF stocké avec son empreinte
+  SHA-256 et l'empreinte des émargements en pied de page). Une correction après clôture crée une nouvelle version ;
+  les précédentes sont conservées.
 - **Évaluations** : les questionnaires (à chaud et à froid) se modifient dans **Paramètres › Évaluations et rappels**.
   Les réponses gardent le libellé des questions au moment de la réponse. L'onglet **Évaluations** de la session présente
   les moyennes, les répartitions et les verbatims, avec un export CSV.
-- **Documents** : convocation (PDF + programme) envoyée depuis l'onglet **Documents** ; feuille d'émargement PDF ;
-  attestation PDF avec la durée réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement
-  signée, les attestations et les évaluations (réponses et synthèse).
+- **Documents** : convocation (PDF + programme) envoyée depuis l'onglet **Documents** ; attestation PDF avec la durée
+  réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement définitive, les attestations
+  telles qu'envoyées et les évaluations (réponses et synthèse).
 
 ## Rôles
 

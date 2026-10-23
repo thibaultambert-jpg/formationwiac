@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/server/auth/guards";
 import { closureDue } from "@/server/domain/automation";
 import { errorState, text, type ActionState } from "@/server/forms";
-import { setAttendanceByAdmin } from "@/server/services/attendance";
+import { AttendanceError, correctionFromForm, recordCorrection } from "@/server/services/attendance";
 import {
   closeSession,
   sendAttendanceLinks,
@@ -104,11 +104,16 @@ export async function closeSessionAction(_state: ActionState, formData: FormData
   redirect(`/admin/sessions/${session.id}?cloture=${result.certificates.sent}-${result.evaluations.sent}`);
 }
 
-export async function setAttendanceAction(formData: FormData): Promise<void> {
+/** Admin attendance correction, appended with its reason (C5). */
+export async function correctAttendanceAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireRole(["admin"]);
-  const enrollmentId = text(formData, "enrollmentId");
-  const slotId = text(formData, "slotId");
-  if (!enrollmentId || !slotId) return;
-  await setAttendanceByAdmin(enrollmentId, slotId, text(formData, "present") === "1", actor.id);
+  try {
+    const correction = await correctionFromForm(formData);
+    await recordCorrection({ ...correction, authorUserId: actor.id, authorTrainerId: null });
+  } catch (error) {
+    if (error instanceof AttendanceError) return errorState(formData, error.message);
+    throw error;
+  }
   refresh();
+  return { status: "success", message: "Correction enregistrée." };
 }
