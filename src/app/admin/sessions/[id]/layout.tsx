@@ -25,6 +25,7 @@ export default async function SessionLayout({ children, params }: LayoutProps<"/
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{session.training.title}</h1>
           <Badge variant={SESSION_STATUS_TONES[session.status]}>{SESSION_STATUS_LABELS[session.status]}</Badge>
+          {session.qualiopiScope ? <Badge variant="info">Périmètre Qualiopi</Badge> : null}
         </div>
         <p className="text-muted-foreground text-sm">
           {session.reference} · {formatDateRange(session.slots.map((slot) => slot.startsAt))} · {session.seats}/
@@ -37,6 +38,8 @@ export default async function SessionLayout({ children, params }: LayoutProps<"/
         items={[
           { href: base, label: "Informations", exact: true, alsoActiveOn: [`${base}/modifier`] },
           { href: `${base}/inscrits`, label: `Inscrits (${session.seats + session.waitlisted})` },
+          ...(session.openToExternal ? [{ href: `${base}/conventions`, label: "Conventions" }] : []),
+          { href: `${base}/conformite`, label: "Conformité" },
           { href: `${base}/emargement`, label: "Émargement" },
           { href: `${base}/documents`, label: "Documents" },
           { href: `${base}/evaluations`, label: "Évaluations" },

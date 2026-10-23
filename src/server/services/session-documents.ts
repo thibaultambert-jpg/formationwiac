@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
 import { presenceAtClosure } from "@/server/domain/automation";
+import { missingOrganizationIdentifiers } from "@/server/domain/compliance";
 import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
 import type { MailAttachment } from "@/server/email/mime";
 import { sessionVariables } from "@/server/email/notifications";
@@ -18,6 +19,17 @@ const DAY = 24 * 3_600_000;
 const EVALUATION_LINK_DAYS = 30;
 
 export type SendReport = { sent: number; skipped: number; failed: number };
+
+/** Business rule violation of a manual send, shown to the user as is. */
+export class DocumentError extends Error {}
+
+/** Documents sent to external trainees must show the SIRET and the NDA (B1). */
+function identifiersError(documents: SessionDocuments): string | null {
+  const missing = missingOrganizationIdentifiers(documents.organization);
+  return missing.length === 0
+    ? null
+    : `Renseignez le ${missing.join(" et le ")} dans Paramètres › Organisme avant d'envoyer des documents aux participants externes.`;
+}
 const emptyReport = (): SendReport => ({ sent: 0, skipped: 0, failed: 0 });
 
 function count(report: SendReport, result: { ok: boolean; skipped?: boolean }) {
@@ -81,7 +93,11 @@ export async function sendConvocations(sessionId: string, actorId: string): Prom
     ? await readStoredFile(documents.session.training.programPdfPath)
     : null;
 
-  for (const enrollment of activeEnrollments(documents, ["confirmed"])) {
+  const recipients = activeEnrollments(documents, ["confirmed"]);
+  const blocked = identifiersError(documents);
+  if (blocked && recipients.some((enrollment) => enrollment.participantType === "external"))
+    throw new DocumentError(blocked);
+  for (const enrollment of recipients) {
     const pdf = await renderConvocation(documents, enrollment);
     await storePdf("convocation", pdf, sessionId, enrollment.id);
     const attachments: MailAttachment[] = [
@@ -262,7 +278,17 @@ export async function sendCertificates(
   const report = emptyReport();
   const mail = await template("certificate");
   const common = await sessionVariables(documents.session);
-  for (const enrollment of activeEnrollments(documents, ["present"])) {
+  const blocked = identifiersError(documents);
+  const recipients = activeEnrollments(documents, ["present"]);
+  if (blocked && !options.automatic && recipients.some((enrollment) => enrollment.participantType === "external"))
+    throw new DocumentError(blocked);
+  for (const enrollment of recipients) {
+    // Automatic send: external certificates wait until the identifiers are set
+    // (no dedup key is claimed, so the next run sends them).
+    if (blocked && enrollment.participantType === "external") {
+      report.failed++;
+      continue;
+    }
     const dedupKey = options.automatic ? `certificate:${enrollment.id}` : undefined;
     if (dedupKey && (await db.document.findUnique({ where: { dedupKey } }))) {
       report.skipped++;

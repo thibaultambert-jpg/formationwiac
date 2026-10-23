@@ -125,7 +125,9 @@ test("companies: contacts, duplicates merge and export", async ({ page }) => {
   if ((await message.textContent())?.includes("ne peut pas")) {
     await page.getByRole("button", { name: "Changer" }).click();
     await page.getByRole("searchbox").fill(`Durand SA ${stamp}`);
-    await page.locator("form").filter({ hasText: "Fusionner" }).getByRole("button").first().click();
+    // Wait for the search results before picking the other company.
+    await expect(options).toHaveCount(2);
+    await options.first().click();
     await page.getByRole("button", { name: "Fusionner" }).click();
   }
   await expect(page.getByText(/a été fusionnée : 1 contact\(s\)/)).toBeVisible();
@@ -186,7 +188,7 @@ test("CSV import, move between sessions and enrollment export", async ({ page },
   await expect(page.getByRole("row").filter({ hasText: "Anna Import" })).toHaveCount(0);
 
   await page.goto(`/admin/sessions/${second}/inscrits`);
-  await expect(page.getByRole("row").filter({ hasText: "Anna Import" })).toContainText("Confirmée");
+  await expect(page.getByRole("row").filter({ hasText: "Anna Import" })).toContainText("En attente de convention");
 
   const csv = await page.request.get(`/admin/sessions/${second}/inscrits/export`);
   const content = await csv.text();

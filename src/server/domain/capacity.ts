@@ -1,10 +1,16 @@
 // Capacity, waitlist and automatic session status rules (section 9, rules 1, 2 and 7).
 
-export type EnrollmentStatusValue = "confirmed" | "waitlisted" | "cancelled" | "present" | "absent";
+export type EnrollmentStatusValue =
+  "confirmed" | "pending_agreement" | "waitlisted" | "cancelled" | "present" | "absent";
 export type SessionStatusValue = "draft" | "published" | "full" | "completed" | "cancelled";
 
 /** Statuses that hold a seat in the session. */
-export const SEAT_HOLDING_STATUSES: readonly EnrollmentStatusValue[] = ["confirmed", "present", "absent"];
+export const SEAT_HOLDING_STATUSES: readonly EnrollmentStatusValue[] = [
+  "confirmed",
+  "pending_agreement",
+  "present",
+  "absent",
+];
 
 export function holdsSeat(status: EnrollmentStatusValue): boolean {
   return SEAT_HOLDING_STATUSES.includes(status);

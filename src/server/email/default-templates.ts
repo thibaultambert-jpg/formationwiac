@@ -21,7 +21,7 @@ export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body
   {
     key: "convocation",
     subject: "Convocation : {{formation}}",
-    body: "Bonjour {{prenom}},\n\nVeuillez trouver ci-joint votre convocation à la formation « {{formation}} » ainsi que son programme.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nÀ bientôt,",
+    body: "Bonjour {{prenom}},\n\nVeuillez trouver ci-joint votre convocation à la formation « {{formation}} » ainsi que son programme.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\nAccès : {{acces}}\nÀ prévoir : {{a_prevoir}}\n\nÀ bientôt,",
   },
   {
     key: "reminder",
@@ -58,6 +58,11 @@ export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body
     subject: "Annulation : {{formation}}",
     body: "Bonjour {{prenom}},\n\nNous sommes au regret de vous informer que la session de la formation « {{formation}} » est annulée.\n\nDates prévues :\n{{dates}}\n\nMotif : {{motif}}\n\nNous vous prions de nous excuser pour ce désagrément.\n\nCordialement,",
   },
+  {
+    key: "convention",
+    subject: "Convention de formation {{reference_convention}} · {{formation}}",
+    body: "Bonjour {{prenom}},\n\nVeuillez trouver ci-joint la convention de formation {{reference_convention}} pour la formation « {{formation}} » ({{dates}}).\n\nMerci de nous la retourner signée, avec la mention « Bon pour accord » et le cachet de l'entreprise : l'inscription de vos collaborateurs sera alors confirmée.\n\nCordialement,",
+  },
 ];
 
 /** Email types sent automatically from lot 3; the others arrive with lot 4. */
@@ -73,6 +78,7 @@ export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
   "evaluation_request",
   "evaluation_reminder",
   "certificate",
+  "convention",
 ];
 
 export const EMAIL_TYPE_LABELS: Record<string, string> = {
@@ -87,6 +93,7 @@ export const EMAIL_TYPE_LABELS: Record<string, string> = {
   evaluation_request: "Évaluation",
   evaluation_reminder: "Relance d'évaluation",
   certificate: "Attestation de fin de formation",
+  convention: "Convention de formation (entreprise)",
 };
 
 /** Document types that are emails (the others are generated PDF files). */

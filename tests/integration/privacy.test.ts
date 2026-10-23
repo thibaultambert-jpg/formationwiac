@@ -53,6 +53,7 @@ async function externalWithEnrollment(endsAt: Date) {
       participantId: participant.id,
       status: "present",
       source: "back_office",
+      participantType: participant.type,
       motivation: "Ma motivation personnelle",
     },
   });

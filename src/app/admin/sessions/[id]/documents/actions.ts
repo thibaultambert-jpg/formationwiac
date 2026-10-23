@@ -11,6 +11,7 @@ import {
   closeSession,
   sendAttendanceLinks,
   sendCertificates,
+  DocumentError,
   sendConvocations,
   sendEvaluationRequests,
   type SendReport,
@@ -37,7 +38,13 @@ export async function sendConvocationsAction(_state: ActionState, formData: Form
   const session = await loadSession(formData);
   if (!session) return errorState(formData, "Session introuvable.");
   if (session.status === "cancelled") return errorState(formData, "Session annulée.");
-  const report = await sendConvocations(session.id, actor.id);
+  let report;
+  try {
+    report = await sendConvocations(session.id, actor.id);
+  } catch (error) {
+    if (error instanceof DocumentError) return errorState(formData, error.message);
+    throw error;
+  }
   refresh();
   return summary("Convocations", report);
 }
@@ -72,7 +79,13 @@ export async function sendCertificatesAction(_state: ActionState, formData: Form
   if (!session) return errorState(formData, "Session introuvable.");
   if (session.status !== "completed")
     return errorState(formData, "Les attestations sont générées pour une session clôturée.");
-  const report = await sendCertificates(session.id, { automatic: false, actorId: actor.id });
+  let report;
+  try {
+    report = await sendCertificates(session.id, { automatic: false, actorId: actor.id });
+  } catch (error) {
+    if (error instanceof DocumentError) return errorState(formData, error.message);
+    throw error;
+  }
   refresh();
   return summary("Attestations", report);
 }

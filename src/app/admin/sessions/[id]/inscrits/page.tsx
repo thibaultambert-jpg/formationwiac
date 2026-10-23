@@ -14,6 +14,7 @@ import {
   ENROLLMENT_SOURCE_LABELS,
   ENROLLMENT_STATUS_LABELS,
   ENROLLMENT_STATUS_TONES,
+  FUNDING_TYPE_LABELS,
   PARTICIPANT_TYPE_LABELS,
 } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
@@ -27,11 +28,19 @@ import {
   EditEnrollmentDialog,
   ImportCsvDialog,
   MoveEnrollmentDialog,
+  WaiveAgreementDialog,
 } from "./enrollment-dialogs";
 
 export const metadata: Metadata = { title: "Inscrits" };
 
-const STATUS_ORDER: Record<string, number> = { confirmed: 0, present: 0, absent: 0, waitlisted: 1, cancelled: 2 };
+const STATUS_ORDER: Record<string, number> = {
+  confirmed: 0,
+  pending_agreement: 0,
+  present: 0,
+  absent: 0,
+  waitlisted: 1,
+  cancelled: 2,
+};
 
 export default async function EnrollmentsPage({ params }: PageProps<"/admin/sessions/[id]/inscrits">) {
   await requireRole(["admin"]);
@@ -153,13 +162,26 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                     </Link>
                     <span className="text-muted-foreground block text-xs">{participant.email}</span>
                   </TableCell>
-                  <TableCell>{PARTICIPANT_TYPE_LABELS[participant.type]}</TableCell>
+                  <TableCell>
+                    {PARTICIPANT_TYPE_LABELS[enrollment.participantType]}
+                    <span className="text-muted-foreground block text-xs">
+                      {FUNDING_TYPE_LABELS[enrollment.fundingType]}
+                    </span>
+                  </TableCell>
                   <TableCell>{participant.company?.name ?? "—"}</TableCell>
                   <TableCell>
                     <Badge variant={ENROLLMENT_STATUS_TONES[enrollment.status]}>
                       {ENROLLMENT_STATUS_LABELS[enrollment.status]}
                       {position ? ` n° ${position}` : ""}
                     </Badge>
+                    {enrollment.agreementWaivedAt ? (
+                      <span
+                        className="text-muted-foreground block max-w-48 truncate text-xs"
+                        title={enrollment.agreementWaiverReason ?? undefined}
+                      >
+                        Sans convention : {enrollment.agreementWaiverReason}
+                      </span>
+                    ) : null}
                     {enrollment.cancellationReason ? (
                       <span className="block max-w-48 truncate text-xs" title={enrollment.cancellationReason}>
                         {enrollment.cancellationReason}
@@ -180,6 +202,7 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                         name,
                         status: enrollment.status,
                         external: participant.type === "external",
+                        fundingType: enrollment.fundingType,
                         appliedPrice: decimalInput(enrollment.appliedPrice),
                         billingCompany: enrollment.billingCompany
                           ? { id: enrollment.billingCompany.id, label: enrollment.billingCompany.name }
@@ -187,6 +210,9 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                         cancellationReason: enrollment.cancellationReason,
                       }}
                     />
+                    {enrollment.status === "pending_agreement" ? (
+                      <WaiveAgreementDialog enrollment={{ id: enrollment.id, name }} />
+                    ) : null}
                     {holdsSeat(enrollment.status) || enrollment.status === "waitlisted" ? (
                       <MoveEnrollmentDialog enrollment={{ id: enrollment.id, name }} targets={moveTargets} />
                     ) : null}

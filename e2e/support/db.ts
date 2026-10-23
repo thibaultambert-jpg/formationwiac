@@ -116,7 +116,8 @@ export async function addExternalEnrollment(
       [company.rows[0].id, person.firstName, person.lastName, person.email],
     );
     await client.query(
-      `INSERT INTO enrollments (id, session_id, participant_id, status, source, updated_at) VALUES (gen_random_uuid(), $1, $2, 'confirmed', 'back_office', now())`,
+      `INSERT INTO enrollments (id, session_id, participant_id, status, source, participant_type, funding_type, agreement_waiver_reason, agreement_waived_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, 'confirmed', 'back_office', 'external', 'company', 'Fixture e2e', now(), now())`,
       [sessionId, participant.rows[0].id],
     );
   });
@@ -144,7 +145,7 @@ export async function createCompletedSessionFor(trainingId: string, userEmail: s
       [session.rows[0].id],
     );
     const enrollment = await client.query<{ id: string }>(
-      `INSERT INTO enrollments (id, session_id, participant_id, status, source, updated_at) VALUES (gen_random_uuid(), $1, $2, 'present', 'front', now()) RETURNING id`,
+      `INSERT INTO enrollments (id, session_id, participant_id, status, source, participant_type, updated_at) VALUES (gen_random_uuid(), $1, $2, 'present', 'front', 'internal', now()) RETURNING id`,
       [session.rows[0].id, participant.rows[0].id],
     );
     await client.query(
@@ -169,5 +170,18 @@ export async function linkInternalTrainer(sessionId: string, userEmail: string) 
       sessionId,
       trainer.rows[0].id,
     ]);
+  });
+}
+
+/** Organization identifiers required on documents sent to externals (SIRET, NDA). */
+export async function ensureOrganizationIdentifiers() {
+  return withDb(async (client) => {
+    await client.query(
+      `INSERT INTO organization_settings (id, name, siret, activity_declaration_number, updated_at)
+       VALUES (1, 'Organisme E2E', '73282932000074', '11755555575', now())
+       ON CONFLICT (id) DO UPDATE SET
+         siret = COALESCE(organization_settings.siret, EXCLUDED.siret),
+         activity_declaration_number = COALESCE(organization_settings.activity_declaration_number, EXCLUDED.activity_declaration_number)`,
+    );
   });
 }

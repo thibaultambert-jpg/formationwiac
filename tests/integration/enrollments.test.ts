@@ -5,7 +5,7 @@ import { allocateReference, createSessionRecord } from "@/server/services/sessio
 
 const stamp = Date.now();
 
-async function fixture(capacityMax: number, participants: number) {
+async function fixture(capacityMax: number, participants: number, type: "internal" | "external" = "internal") {
   const actor = await db.user.create({
     data: { email: `actor-${stamp}-${Math.random()}@test.example`, role: "admin" },
   });
@@ -28,6 +28,8 @@ async function fixture(capacityMax: number, participants: number) {
       capacityMin: null,
       registrationDeadline: null,
       openToInternal: true,
+      qualiopiScope: false,
+      accessInfo: null,
       openToExternal: true,
       internalNotes: null,
       trainerIds: [],
@@ -39,8 +41,8 @@ async function fixture(capacityMax: number, participants: number) {
     Array.from({ length: participants }, (_, index) =>
       db.participant.create({
         data: {
-          type: "external",
-          companyId: company.id,
+          type,
+          companyId: type === "external" ? company.id : null,
           firstName: `P${index}`,
           lastName: "Test",
           email: `p${index}-${stamp}-${Math.random()}@test.example`,
@@ -117,7 +119,7 @@ describe("enrollments against the database", () => {
   });
 
   it("refuses externals on a session closed to externals (rule 6)", async () => {
-    const { actor, session, people } = await fixture(5, 1);
+    const { actor, session, people } = await fixture(5, 1, "external");
     await db.trainingSession.update({ where: { id: session.id }, data: { openToExternal: false } });
     await expect(
       db.$transaction((tx) =>

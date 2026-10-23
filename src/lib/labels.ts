@@ -16,6 +16,7 @@ export const SESSION_STATUS_LABELS = {
 
 export const ENROLLMENT_STATUS_LABELS = {
   confirmed: "Confirmée",
+  pending_agreement: "En attente de convention",
   waitlisted: "Liste d'attente",
   cancelled: "Annulée",
   present: "Présente",
@@ -49,6 +50,7 @@ export const SESSION_STATUS_TONES: Record<keyof typeof SESSION_STATUS_LABELS, Ba
 
 export const ENROLLMENT_STATUS_TONES: Record<keyof typeof ENROLLMENT_STATUS_LABELS, BadgeTone> = {
   confirmed: "success",
+  pending_agreement: "warning",
   waitlisted: "warning",
   cancelled: "secondary",
   present: "info",
@@ -89,4 +91,28 @@ export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   participant: "Participant",
   enrollment: "Inscription",
   settings: "Paramètres",
+};
+
+export const FUNDING_TYPE_LABELS = {
+  none: "Plan de formation interne",
+  company: "Fonds propres de l'entreprise cliente",
+  opco: "OPCO",
+  cpf: "CPF",
+  france_travail: "France Travail",
+  region: "Région",
+  other: "Autre",
+} as const;
+
+export const CONVENTION_STATUS_LABELS = {
+  draft: "Brouillon",
+  sent: "Envoyée",
+  signed: "Signée",
+  cancelled: "Annulée",
+} as const;
+
+export const CONVENTION_STATUS_TONES: Record<keyof typeof CONVENTION_STATUS_LABELS, BadgeTone> = {
+  draft: "secondary",
+  sent: "info",
+  signed: "success",
+  cancelled: "secondary",
 };

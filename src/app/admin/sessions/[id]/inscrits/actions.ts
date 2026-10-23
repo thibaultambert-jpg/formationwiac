@@ -25,6 +25,7 @@ import {
   moveEnrollment,
   overlappingEnrollments,
   updateEnrollment,
+  waiveAgreement,
 } from "@/server/services/enrollments";
 import { noticeForStatus, promotionNotices, scheduleEnrollmentNotices } from "@/server/email/notifications";
 import { MAX_UPLOAD_BYTES, readUpload } from "@/server/storage";
@@ -38,9 +39,18 @@ function notifyNew(formData: FormData, enrollments: { id: string; status: string
 }
 
 function enrolledMessage(name: string, status: string): string {
-  return status === "waitlisted"
-    ? `${name} a été placé(e) en liste d'attente : la session est complète.`
-    : `${name} est inscrit(e).`;
+  if (status === "waitlisted") return `${name} a été placé(e) en liste d'attente : la session est complète.`;
+  if (status === "pending_agreement")
+    return `${name} est inscrit(e), en attente de la convention de formation (onglet Conventions).`;
+  return `${name} est inscrit(e).`;
+}
+
+const FUNDING_VALUES = ["none", "company", "opco", "cpf", "france_travail", "region", "other"] as const;
+const fundingSchema = z.enum(FUNDING_VALUES);
+
+function fundingFrom(formData: FormData) {
+  const parsed = fundingSchema.safeParse(text(formData, "fundingType"));
+  return parsed.success ? parsed.data : null;
 }
 
 function overlapWarnings(name: string, overlaps: string[]): string[] {
@@ -200,6 +210,7 @@ export async function addExternalEnrollment(_state: ActionState, formData: FormD
         participantId: participant.id,
         source: "back_office",
         actorId: actor.id,
+        fundingType: fundingFrom(formData),
       });
       // Billing goes to the company chosen in the dialog.
       if (enrollment.billingCompanyId !== company.id) {
@@ -371,7 +382,8 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
 
 const updateSchema = z.object({
   enrollmentId: z.uuid(),
-  status: z.enum(["confirmed", "waitlisted", "cancelled", "present", "absent"]),
+  status: z.enum(["confirmed", "pending_agreement", "waitlisted", "cancelled", "present", "absent"]),
+  fundingType: fundingSchema.optional(),
   appliedPrice: z.number({ error: "Prix invalide." }).min(0, "Prix invalide.").nullable(),
   billingCompanyId: z.uuid().nullable(),
   cancellationReason: z.string().nullable(),
@@ -382,6 +394,7 @@ export async function updateEnrollmentAction(_state: ActionState, formData: Form
   const parsed = updateSchema.safeParse({
     enrollmentId: text(formData, "enrollmentId"),
     status: text(formData, "status"),
+    fundingType: text(formData, "fundingType") ?? undefined,
     appliedPrice: parseFrenchDecimal(text(formData, "appliedPrice")),
     billingCompanyId: text(formData, "billingCompanyId"),
     cancellationReason: text(formData, "cancellationReason"),
@@ -440,6 +453,23 @@ export async function moveEnrollmentAction(_state: ActionState, formData: FormDa
       status: "success",
       message: `Inscription déplacée vers ${result.target.reference}${result.status === "waitlisted" ? " (liste d'attente)" : ""}.`,
     };
+  } catch (error) {
+    if (error instanceof EnrollmentError) return errorState(formData, error.message);
+    throw error;
+  }
+}
+
+export async function waiveAgreementAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const enrollmentId = text(formData, "enrollmentId");
+  const reason = text(formData, "reason");
+  if (!enrollmentId) return errorState(formData, "Inscription introuvable.");
+  if (!reason) return errorState(formData, "Le motif de la dérogation est obligatoire.", { reason: "Obligatoire." });
+  try {
+    const { confirmed } = await waiveAgreement(enrollmentId, reason, actor.id);
+    if (confirmed) scheduleEnrollmentNotices([{ enrollmentId, notice: "confirmation" }]);
+    refresh();
+    return { status: "success", message: "Dérogation enregistrée." };
   } catch (error) {
     if (error instanceof EnrollmentError) return errorState(formData, error.message);
     throw error;

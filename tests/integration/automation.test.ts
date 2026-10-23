@@ -56,7 +56,13 @@ async function fixture() {
   const enrollments = await Promise.all(
     [present, absent].map((participant) =>
       db.enrollment.create({
-        data: { sessionId: session.id, participantId: participant.id, status: "confirmed", source: "back_office" },
+        data: {
+          sessionId: session.id,
+          participantId: participant.id,
+          status: "confirmed",
+          source: "back_office",
+          participantType: participant.type,
+        },
       }),
     ),
   );

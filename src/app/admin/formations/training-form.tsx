@@ -14,6 +14,7 @@ export type TrainingFormValues = {
   prerequisites: string | null;
   targetAudience: string | null;
   programText: string | null;
+  thingsToBring: string | null;
   programPdfPath: string | null;
   durationHours: string;
   modality: string;
@@ -83,6 +84,12 @@ export function TrainingForm({
       <TextareaField name="prerequisites" label="Prérequis" defaultValue={training?.prerequisites} />
       <TextareaField name="targetAudience" label="Public visé" defaultValue={training?.targetAudience} />
       <TextareaField name="programText" label="Programme" rows={8} defaultValue={training?.programText} />
+      <TextareaField
+        name="thingsToBring"
+        label="Matériel ou documents à prévoir"
+        hint="Repris dans la convocation (ordinateur, pièce d'identité, supports…)."
+        defaultValue={training?.thingsToBring}
+      />
       <FileField
         name="programPdf"
         label={training?.programPdfPath ? "Remplacer le programme PDF" : "Programme PDF"}
