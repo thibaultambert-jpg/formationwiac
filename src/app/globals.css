@@ -4,39 +4,43 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * WiAcademy brand theme (shadcn/ui tokens). Brand colors come from the official
- * logo: violet #451dc7 and green #04f06a. The green is decorative only (lines,
- * markers, text on violet): it is not readable as text on a light background.
- * Every text/background pair meets WCAG AA contrast.
+ * WiAcademy brand theme (shadcn/ui tokens), matched on wiacademy.fr: violet
+ * #461dc8 for bands, buttons and the active navigation pill, turquoise #2ed4c0
+ * for calls to action and highlights on violet, lavender surfaces. The logo
+ * green #04f06a stays in the logo only. Turquoise is not readable as text on a
+ * light background: use --brand-teal-ink there. Every text/background pair
+ * meets WCAG AA contrast.
  */
 :root {
   --radius: 0.75rem;
-  --brand: #451dc7;
-  --brand-dark: #2c1191;
-  --brand-green: #04f06a;
-  --background: #f8f7fd;
-  --foreground: #1c1240;
+  --brand: #461dc8;
+  --brand-dark: #16295b;
+  --brand-teal: #2ed4c0;
+  --brand-teal-ink: #0d6f66;
+  --brand-lavender: #d4ccf3;
+  --background: #ffffff;
+  --foreground: #16133a;
   --card: #ffffff;
-  --card-foreground: #1c1240;
+  --card-foreground: #16133a;
   --popover: #ffffff;
-  --popover-foreground: #1c1240;
-  --primary: #451dc7;
+  --popover-foreground: #16133a;
+  --primary: #461dc8;
   --primary-foreground: #ffffff;
-  --secondary: #eeeafb;
-  --secondary-foreground: #2c1191;
-  --muted: #f1eefb;
+  --secondary: #e8e5f6;
+  --secondary-foreground: #3a17a8;
+  --muted: #f7f5ff;
   --muted-foreground: #5b5677;
-  --accent: #ebe6fb;
-  --accent-foreground: #2c1191;
+  --accent: #efebfd;
+  --accent-foreground: #3a17a8;
   --destructive: #c62828;
-  --border: #e2ddf3;
+  --border: #e2def3;
   --input: #d6d0ec;
-  --ring: #451dc7;
-  --sidebar: #2c1191;
+  --ring: #461dc8;
+  --sidebar: #461dc8;
   --sidebar-foreground: #ffffff;
-  --sidebar-accent: rgb(255 255 255 / 0.12);
+  --sidebar-accent: rgb(255 255 255 / 0.14);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #3a1fa8;
+  --sidebar-border: #5530d0;
 }
 
 @theme inline {
@@ -44,7 +48,9 @@
   --font-mono: var(--font-geist-mono);
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
-  --color-brand-green: var(--brand-green);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-ink: var(--brand-teal-ink);
+  --color-brand-lavender: var(--brand-lavender);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -79,7 +85,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-clip;
   }
   h1,
   h2,

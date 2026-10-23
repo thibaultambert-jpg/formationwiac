@@ -6,14 +6,15 @@ import type { CurrentUser } from "@/server/auth/guards";
 import { hasRole } from "@/server/auth/policy";
 
 const linkClassName =
-  "text-foreground/80 hover:text-primary hover:bg-accent inline-flex rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring";
-// Active link: violet text with the brand green underline.
-const activeClassName = "text-primary font-semibold shadow-[inset_0_-3px_0_var(--brand-green)] rounded-b-none";
+  "text-foreground hover:bg-white/60 inline-flex rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring";
+// Active link: violet pill, as on wiacademy.fr.
+const activeClassName = "bg-primary text-primary-foreground hover:bg-primary font-semibold";
 
+/** Floating lavender navigation bar on the violet band (wiacademy.fr header). */
 export function FrontHeader({ user }: { user: CurrentUser }) {
   return (
-    <header className="bg-card border-b">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <header className="bg-primary px-4 pt-4">
+      <div className="bg-brand-lavender mx-auto flex max-w-6xl flex-col gap-3 rounded-2xl px-4 py-3 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center justify-between gap-4">
           <Link
             href="/"

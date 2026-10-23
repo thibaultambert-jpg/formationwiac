@@ -17,7 +17,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           className="flex flex-col gap-1 rounded-md px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
           <Logo className="h-9 self-start" />
-          <span className="text-brand-green text-xs font-semibold tracking-widest uppercase">Back-office</span>
+          <span className="text-brand-teal text-xs font-semibold tracking-[0.2em] uppercase">Back-office</span>
         </Link>
         <AdminSidebar />
         <Link

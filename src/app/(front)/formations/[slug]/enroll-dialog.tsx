@@ -44,7 +44,7 @@ export function EnrollDialog({ session, showTrigger }: { session: SessionSummary
     >
       {showTrigger ? (
         <DialogTrigger asChild>
-          <Button variant={session.full ? "outline" : "default"}>
+          <Button variant={session.full ? "outline" : "cta"}>
             {session.full ? "Rejoindre la liste d'attente" : "S'inscrire"}
           </Button>
         </DialogTrigger>

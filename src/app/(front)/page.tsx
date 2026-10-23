@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarDays, Clock, MapPin } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, MapPin } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterBar, param } from "@/components/layout/filter-bar";
+import { FrontHero } from "@/components/layout/front-hero";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { formatDate, formatMonth, toParisDateInput } from "@/lib/dates";
@@ -39,18 +40,12 @@ export default async function CatalogPage({ searchParams }: PageProps<"/">) {
 
   return (
     <>
-      <section className="bg-brand-dark relative mb-8 overflow-hidden rounded-2xl px-6 py-10 text-white sm:px-10">
-        <div
-          aria-hidden="true"
-          className="bg-primary absolute -top-24 -right-16 size-72 rounded-full opacity-70 blur-2xl"
-        />
-        <div className="relative max-w-2xl space-y-3">
-          <p className="text-brand-green text-sm font-semibold tracking-widest uppercase">WiAcademy</p>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Catalogue des formations</h1>
-          <span aria-hidden="true" className="bg-brand-green block h-1 w-16 rounded-full" />
-          <p className="text-white/85">Les formations ouvertes aux collaborateurs, avec leurs prochaines sessions.</p>
-        </div>
-      </section>
+      <FrontHero
+        eyebrow="Catalogue"
+        title="Catalogue des"
+        highlight="formations"
+        description="Les formations ouvertes aux collaborateurs, avec leurs prochaines sessions."
+      />
       <FilterBar
         resetHref="/"
         fields={[
@@ -84,15 +79,15 @@ export default async function CatalogPage({ searchParams }: PageProps<"/">) {
               <li key={training.id}>
                 <Link
                   href={`/formations/${training.slug}`}
-                  className="bg-card hover:border-primary focus-visible:ring-ring flex h-full flex-col gap-3 rounded-xl border p-5 shadow-sm transition-colors outline-none focus-visible:ring-2"
+                  className="group bg-card focus-visible:ring-ring border-l-primary hover:shadow-primary/10 flex h-full flex-col gap-3 rounded-xl border border-l-4 p-6 shadow-sm transition-all outline-none hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2"
                 >
                   <div className="flex flex-wrap gap-2">
                     {training.theme ? <Badge variant="secondary">{training.theme.name}</Badge> : null}
                     <Badge variant="outline">{MODALITY_LABELS[training.modality]}</Badge>
                   </div>
-                  <h2 className="text-lg leading-snug font-semibold">{training.title}</h2>
+                  <h2 className="text-lg leading-snug font-bold">{training.title}</h2>
                   <p className="text-muted-foreground line-clamp-3 text-sm">{training.objectives}</p>
-                  <div className="mt-auto space-y-1 text-sm">
+                  <div className="text-foreground/80 mt-auto space-y-1.5 text-sm">
                     <p className="flex items-center gap-2">
                       <Clock aria-hidden="true" className="size-4" />
                       {formatDecimal(training.durationHours)} heures
@@ -111,6 +106,10 @@ export default async function CatalogPage({ searchParams }: PageProps<"/">) {
                         : "Complet : liste d'attente"}
                     </p>
                   </div>
+                  <span className="bg-primary text-primary-foreground group-hover:bg-primary/90 mt-2 inline-flex items-center gap-1.5 self-start rounded-full px-4 py-1.5 text-xs font-semibold">
+                    Voir la formation
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </span>
                 </Link>
               </li>
             );

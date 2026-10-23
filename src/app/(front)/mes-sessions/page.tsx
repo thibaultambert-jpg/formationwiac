@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/layout/empty-state";
-import { PageHeader } from "@/components/layout/page-header";
+import { FrontHero } from "@/components/layout/front-hero";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
@@ -37,7 +37,8 @@ export default async function MySessionsPage() {
 
   return (
     <>
-      <PageHeader
+      <FrontHero
+        eyebrow="Formateur"
         title="Mes sessions"
         description="Les sessions que vous animez, la liste des inscrits et l'émargement en direct."
       />
