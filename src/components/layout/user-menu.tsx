@@ -7,7 +7,7 @@ export function UserMenu({ user }: { user: CurrentUser }) {
     <div className="flex items-center gap-3">
       <div className="hidden text-right text-sm leading-tight sm:block">
         <p className="font-medium">{displayName(user)}</p>
-        <p className="text-muted-foreground">{ROLE_LABELS[user.role]}</p>
+        <p className="text-foreground/70">{ROLE_LABELS[user.role]}</p>
       </div>
       <SignOutButton />
     </div>

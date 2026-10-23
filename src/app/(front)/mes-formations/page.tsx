@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarCheck, FileDown, Video } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
-import { PageHeader } from "@/components/layout/page-header";
+import { FrontHero } from "@/components/layout/front-hero";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
@@ -45,10 +45,14 @@ export default async function MyTrainingsPage() {
 
   return (
     <>
-      <PageHeader title="Mes formations" description="Vos inscriptions à venir et vos formations passées." />
+      <FrontHero
+        eyebrow="Mon espace"
+        title="Mes formations"
+        description="Vos inscriptions à venir et vos formations passées."
+      />
 
       <section aria-labelledby="upcoming-title" className="mb-10 space-y-3">
-        <h2 id="upcoming-title" className="text-lg font-semibold">
+        <h2 id="upcoming-title" className="text-2xl font-bold">
           À venir ({upcoming.length})
         </h2>
         {upcoming.length === 0 ? (
@@ -127,7 +131,7 @@ export default async function MyTrainingsPage() {
       </section>
 
       <section aria-labelledby="past-title" className="space-y-3">
-        <h2 id="past-title" className="text-lg font-semibold">
+        <h2 id="past-title" className="text-2xl font-bold">
           Formations passées ({past.length})
         </h2>
         {past.length === 0 ? (

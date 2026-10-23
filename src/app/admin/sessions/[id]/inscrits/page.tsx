@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { formatDate, formatDateRange } from "@/lib/dates";
 import {
@@ -38,26 +39,38 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
   const session = await getSessionDetail(id);
   if (!session) notFound();
 
-  const [enrollments, targets] = await Promise.all([
+  const openTargets = {
+    id: { not: session.id },
+    status: { notIn: ["cancelled", "completed"] },
+  } satisfies Prisma.TrainingSessionWhereInput;
+  const targetInclude = {
+    training: { select: { title: true } },
+    slots: { select: { startsAt: true } },
+  } satisfies Prisma.TrainingSessionInclude;
+  // Sessions of the same training are always offered; other trainings are capped.
+  const [enrollments, sameTraining, otherTrainings] = await Promise.all([
     db.enrollment.findMany({
       where: { sessionId: session.id },
       include: { participant: { include: { company: true } }, billingCompany: true },
     }),
     db.trainingSession.findMany({
-      where: { id: { not: session.id }, status: { notIn: ["cancelled", "completed"] } },
-      include: { training: { select: { title: true } }, slots: { select: { startsAt: true } } },
+      where: { ...openTargets, trainingId: session.trainingId },
+      include: targetInclude,
+    }),
+    db.trainingSession.findMany({
+      where: { ...openTargets, trainingId: { not: session.trainingId } },
+      include: targetInclude,
+      orderBy: { createdAt: "desc" },
       take: 200,
     }),
   ]);
   const sorted = enrollments.sort(
     (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.enrolledAt.getTime() - b.enrolledAt.getTime(),
   );
-  const moveTargets = targets
-    .sort((a, b) => Number(b.trainingId === session.trainingId) - Number(a.trainingId === session.trainingId))
-    .map((target) => ({
-      id: target.id,
-      label: `${target.reference} · ${target.training.title} · ${formatDateRange(target.slots.map((slot) => slot.startsAt))}`,
-    }));
+  const moveTargets = [...sameTraining, ...otherTrainings].map((target) => ({
+    id: target.id,
+    label: `${target.reference} · ${target.training.title} · ${formatDateRange(target.slots.map((slot) => slot.startsAt))}`,
+  }));
 
   const open = acceptsEnrollments(session.status);
   let waitlistPosition = 0;
