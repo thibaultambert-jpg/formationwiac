@@ -1,15 +1,18 @@
 import { CheckCircle2 } from "lucide-react";
+import { AttendanceCell } from "@/components/attendance/attendance-cell";
+import { CorrectionDialog } from "@/components/attendance/correction-dialog";
 import { SignDialog } from "@/components/attendance/sign-dialog";
 import { Badge } from "@/components/ui/badge";
-import { db } from "@/lib/db";
-import { formatTime } from "@/lib/dates";
+import { insideWindow, linkWindow } from "@/server/domain/attendance-proof";
 import { signingWindowOpen } from "@/server/domain/automation";
+import { attendanceMargins, loadAttendanceGrid } from "@/server/services/attendance";
 import { slotLabels } from "@/server/services/session-labels";
-import { signAsTrainer, signOnTrainerDevice } from "@/app/(public)/actions";
+import { correctAsTrainer, signAsTrainer, signOnTrainerDevice } from "@/app/(public)/actions";
 
 /**
  * Live attendance for a trainer (personal link or "Mes sessions"): trainer
- * signature per slot and participants signing on the trainer's device.
+ * signature per slot, participants signing on the trainer's device, and
+ * absences, lateness or early departures declared with a reason (C3).
  */
 export async function LiveAttendance({
   sessionId,
@@ -20,29 +23,20 @@ export async function LiveAttendance({
   trainerId: string;
   auth: Record<string, string>;
 }) {
-  const session = await db.trainingSession.findUniqueOrThrow({
-    where: { id: sessionId },
-    include: {
-      training: true,
-      slots: { orderBy: { startsAt: "asc" }, include: { trainerSignatures: { where: { trainerId } } } },
-      enrollments: {
-        where: { status: { in: ["confirmed", "present", "absent"] } },
-        include: { participant: { include: { company: true } }, attendances: true },
-        orderBy: { participant: { lastName: "asc" } },
-      },
-    },
-  });
+  const session = await loadAttendanceGrid(sessionId);
+  if (!session) return null;
+  const margins = await attendanceMargins();
   const now = new Date();
   const labels = slotLabels(session.slots);
 
   return (
     <div className="space-y-6">
       {session.slots.map((slot, index) => {
+        // Trainer signature: on the slot's day; participants on this device: only during the slot window.
         const open = signingWindowOpen(slot, now);
-        const signed = slot.trainerSignatures.length > 0;
-        const signedCount = session.enrollments.filter((enrollment) =>
-          enrollment.attendances.some((a) => a.slotId === slot.id && a.present),
-        ).length;
+        const deviceOpen = insideWindow(linkWindow(slot, margins), now);
+        const signed = slot.trainerSignatures.some((signature) => signature.trainerId === trainerId);
+        const signedCount = session.enrollments.filter((enrollment) => enrollment.cells[index].view.signed).length;
         return (
           <section
             key={slot.id}
@@ -60,7 +54,7 @@ export async function LiveAttendance({
             </p>
             <ul className="divide-y rounded-md border">
               {session.enrollments.map((enrollment) => {
-                const attendance = enrollment.attendances.find((item) => item.slotId === slot.id);
+                const cell = enrollment.cells[index];
                 const name = `${enrollment.participant.firstName} ${enrollment.participant.lastName}`;
                 return (
                   <li key={enrollment.id} className="flex flex-wrap items-center justify-between gap-2 p-2 text-sm">
@@ -70,22 +64,30 @@ export async function LiveAttendance({
                         <span className="text-muted-foreground"> · {enrollment.participant.company.name}</span>
                       ) : null}
                     </span>
-                    {attendance?.present ? (
-                      <span className="flex items-center gap-1 text-emerald-800">
-                        <CheckCircle2 aria-hidden="true" className="size-4" />
-                        {attendance.signedAt ? `Signé à ${formatTime(attendance.signedAt)}` : "Présent"}
-                      </span>
-                    ) : open ? (
-                      <SignDialog
-                        action={signOnTrainerDevice}
-                        hidden={{ ...auth, enrollmentId: enrollment.id, slotId: slot.id }}
-                        buttonLabel="Faire signer"
-                        title={`Signature de ${name}`}
-                        description={`Créneau ${labels[index]}. Le participant signe sur cet appareil.`}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">Non signé</span>
-                    )}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {cell.view.signed || cell.view.corrected ? (
+                        <AttendanceCell cell={cell} />
+                      ) : deviceOpen ? (
+                        <SignDialog
+                          action={signOnTrainerDevice}
+                          hidden={{ ...auth, enrollmentId: enrollment.id, slotId: slot.id }}
+                          buttonLabel="Faire signer"
+                          title={`Signature de ${name}`}
+                          description={`Créneau ${labels[index]}. Le participant signe sur cet appareil.`}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">Non signé</span>
+                      )}
+                      {open || deviceOpen ? (
+                        <CorrectionDialog
+                          action={correctAsTrainer}
+                          hidden={{ ...auth, enrollmentId: enrollment.id, slotId: slot.id }}
+                          participant={name}
+                          slotLabel={labels[index]}
+                          states={["absent", "late", "left_early"]}
+                        />
+                      ) : null}
+                    </span>
                   </li>
                 );
               })}

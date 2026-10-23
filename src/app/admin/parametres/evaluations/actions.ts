@@ -12,6 +12,8 @@ const delaysSchema = z.object({
   reminderDaysBefore: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(0).max(60),
   coldEvaluationDays: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(7).max(365),
   evaluationReminderDays: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(1).max(60),
+  attendanceMarginBefore: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(0).max(240),
+  attendanceMarginAfter: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(0).max(480),
 });
 
 export async function saveDelays(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -20,6 +22,8 @@ export async function saveDelays(_state: ActionState, formData: FormData): Promi
     reminderDaysBefore: Number(text(formData, "reminderDaysBefore")),
     coldEvaluationDays: Number(text(formData, "coldEvaluationDays")),
     evaluationReminderDays: Number(text(formData, "evaluationReminderDays")),
+    attendanceMarginBefore: Number(text(formData, "attendanceMarginBefore")),
+    attendanceMarginAfter: Number(text(formData, "attendanceMarginAfter")),
   });
   if (!parsed.success) return errorState(formData, "Délais invalides.", zodFieldErrors(parsed.error.issues));
   const before = await db.organizationSettings.findUnique({ where: { id: 1 } });
@@ -38,6 +42,8 @@ export async function saveDelays(_state: ActionState, formData: FormData): Promi
           reminderDaysBefore: before.reminderDaysBefore,
           coldEvaluationDays: before.coldEvaluationDays,
           evaluationReminderDays: before.evaluationReminderDays,
+          attendanceMarginBefore: before.attendanceMarginBefore,
+          attendanceMarginAfter: before.attendanceMarginAfter,
         }
       : null,
     after: parsed.data,

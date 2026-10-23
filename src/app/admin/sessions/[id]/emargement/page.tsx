@@ -1,36 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Download } from "lucide-react";
+import { Download } from "lucide-react";
+import { AttendanceCell } from "@/components/attendance/attendance-cell";
+import { CorrectionDialog } from "@/components/attendance/correction-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { db } from "@/lib/db";
 import { formatDate, formatTime } from "@/lib/dates";
 import { requireRole } from "@/server/auth/guards";
-import { sendAttendanceLinksAction, setAttendanceAction } from "../documents/actions";
+import { loadAttendanceGrid } from "@/server/services/attendance";
+import { correctAttendanceAction, sendAttendanceLinksAction } from "../documents/actions";
 
 export const metadata: Metadata = { title: "Émargement" };
-
-const METHOD_LABELS: Record<string, string> = {
-  participant_link: "lien personnel",
-  trainer_device: "appareil du formateur",
-};
 
 export default async function SessionAttendancePage({ params }: PageProps<"/admin/sessions/[id]/emargement">) {
   await requireRole(["admin"]);
   const { id } = await params;
-  const session = await db.trainingSession.findUnique({
-    where: { id },
-    include: {
-      slots: { orderBy: { startsAt: "asc" }, include: { trainerSignatures: true } },
-      trainers: { include: { trainer: true } },
-      enrollments: {
-        where: { status: { in: ["confirmed", "present", "absent"] } },
-        include: { participant: true, attendances: true },
-        orderBy: { participant: { lastName: "asc" } },
-      },
-    },
-  });
+  const session = await loadAttendanceGrid(id);
   if (!session) notFound();
 
   return (
@@ -40,7 +26,7 @@ export default async function SessionAttendancePage({ params }: PageProps<"/admi
           <ActionButton
             action={sendAttendanceLinksAction}
             hidden={{ sessionId: session.id }}
-            label="Envoyer le lien d'émargement"
+            label="Envoyer les liens d'émargement"
           />
         ) : null}
         <Button asChild variant="outline">
@@ -51,8 +37,9 @@ export default async function SessionAttendancePage({ params }: PageProps<"/admi
         </Button>
       </div>
       <p className="text-muted-foreground text-sm">
-        Les liens sont aussi envoyés automatiquement le matin de chaque journée de formation. Les corrections faites ici
-        sont tracées dans l&apos;historique.
+        Chaque participant reçoit un lien personnel par demi-journée, utilisable une seule fois et seulement autour du
+        créneau. Les liens partent automatiquement le matin de chaque journée de formation. Les émargements ne sont
+        jamais modifiés : une correction s&apos;ajoute avec son motif et son auteur. Heures affichées en heure de Paris.
       </p>
       {session.enrollments.length === 0 ? (
         <p className="text-muted-foreground text-sm">Aucun participant confirmé.</p>
@@ -72,38 +59,28 @@ export default async function SessionAttendancePage({ params }: PageProps<"/admi
             </TableRow>
           </TableHeader>
           <TableBody>
-            {session.enrollments.map((enrollment) => (
-              <TableRow key={enrollment.id}>
-                <TableCell className="font-medium">
-                  {enrollment.participant.firstName} {enrollment.participant.lastName}
-                </TableCell>
-                {session.slots.map((slot) => {
-                  const attendance = enrollment.attendances.find((item) => item.slotId === slot.id);
-                  return (
-                    <TableCell key={slot.id} className="text-center text-xs">
-                      {attendance?.present ? (
-                        <span className="inline-flex flex-col items-center text-emerald-800">
-                          <CheckCircle2 aria-hidden="true" className="size-4" />
-                          {attendance.signedAt
-                            ? `${formatTime(attendance.signedAt)} · ${METHOD_LABELS[attendance.method ?? ""] ?? ""}`
-                            : "Présent (BO)"}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{attendance ? "Absent" : "—"}</span>
-                      )}
-                      <form action={setAttendanceAction} className="mt-1">
-                        <input type="hidden" name="enrollmentId" value={enrollment.id} />
-                        <input type="hidden" name="slotId" value={slot.id} />
-                        <input type="hidden" name="present" value={attendance?.present ? "0" : "1"} />
-                        <button type="submit" className="text-primary underline-offset-4 hover:underline">
-                          {attendance?.present ? "Marquer absent" : "Marquer présent"}
-                        </button>
-                      </form>
+            {session.enrollments.map((enrollment) => {
+              const name = `${enrollment.participant.firstName} ${enrollment.participant.lastName}`;
+              return (
+                <TableRow key={enrollment.id}>
+                  <TableCell className="font-medium">{name}</TableCell>
+                  {enrollment.cells.map((cell) => (
+                    <TableCell key={cell.slot.id} className="text-center align-top">
+                      <AttendanceCell cell={cell}>
+                        {session.status !== "cancelled" ? (
+                          <CorrectionDialog
+                            action={correctAttendanceAction}
+                            hidden={{ enrollmentId: enrollment.id, slotId: cell.slot.id }}
+                            participant={name}
+                            slotLabel={`${formatDate(cell.slot.startsAt)} ${formatTime(cell.slot.startsAt)}–${formatTime(cell.slot.endsAt)}`}
+                          />
+                        ) : null}
+                      </AttendanceCell>
                     </TableCell>
-                  );
-                })}
-              </TableRow>
-            ))}
+                  ))}
+                </TableRow>
+              );
+            })}
             {session.trainers.map(({ trainer }) => (
               <TableRow key={trainer.id} className="bg-muted/30">
                 <TableCell>

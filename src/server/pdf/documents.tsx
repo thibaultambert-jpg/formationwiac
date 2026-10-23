@@ -2,6 +2,7 @@ import "server-only";
 import { Document, Image, Page, renderToBuffer, Text, View } from "@react-pdf/renderer";
 import { formatDate, formatTime, formatWeekday } from "@/lib/dates";
 import { MODALITY_LABELS } from "@/lib/labels";
+import { attended as attendedSlot } from "@/server/domain/attendance-proof";
 import { ACTION_NATURE } from "@/server/domain/compliance";
 import { formatDecimal } from "@/server/domain/numbers";
 import { totalHours } from "@/server/domain/slots";
@@ -84,9 +85,20 @@ export async function renderConvocation(documents: SessionDocuments, enrollment:
 
 const SLOTS_PER_PAGE = 4;
 
+const CORRECTION_TEXT: Record<string, string> = {
+  absent: "Absent",
+  late: "Retard, arrivée à",
+  left_early: "Départ anticipé à",
+  present: "Présent (déclaré)",
+};
+
 /** One row per participant, one column per slot (half-day), with signatures. */
-export async function renderAttendanceSheet(documents: SessionDocuments): Promise<Buffer> {
-  const { session, organization, signatures, trainerSignatures } = documents;
+export async function renderAttendanceSheet(
+  documents: SessionDocuments,
+  options: { final: boolean; generatedAt?: Date } = { final: false },
+): Promise<Buffer> {
+  const { session, organization, signatures, trainerSignatures, cells, fingerprint } = documents;
+  const generatedAt = options.generatedAt ?? new Date();
   const pages: (typeof session.slots)[] = [];
   for (let index = 0; index < Math.max(session.slots.length, 1); index += SLOTS_PER_PAGE) {
     pages.push(session.slots.slice(index, index + SLOTS_PER_PAGE));
@@ -120,20 +132,29 @@ export async function renderAttendanceSheet(documents: SessionDocuments): Promis
               <View key={enrollment.id} style={row} wrap={false}>
                 <Text style={{ ...cell, width: nameWidth }}>{participantLine(enrollment)}</Text>
                 {slots.map((slot) => {
-                  const attendance = enrollment.attendances.find((item) => item.slotId === slot.id);
+                  const state = cells.get(`${enrollment.id}:${slot.id}`)!;
                   const image = signatures.get(`${enrollment.id}:${slot.id}`);
+                  const signedAt = state.attendance?.method ? state.attendance.signedAt : null;
+                  const correction = state.correction;
                   return (
                     <View key={slot.id} style={{ ...cell, flex: 1, alignItems: "center" }}>
                       {image ? (
-                        <Image style={{ height: 36, objectFit: "contain" }} src={signatureSource(image)} />
+                        <Image style={{ height: 32, objectFit: "contain" }} src={signatureSource(image)} />
                       ) : null}
-                      {attendance?.present ? (
+                      {signedAt ? (
                         <Text style={{ fontSize: 7, color: "#6b7280" }}>
-                          {attendance.signedAt
-                            ? `Signé le ${formatDate(attendance.signedAt)} ${formatTime(attendance.signedAt)}`
-                            : "Présent (saisie BO)"}
+                          {state.attendance?.method === "attestation_checkbox" ? "Attestation sur l'honneur - " : ""}
+                          Signé le {formatDate(signedAt)} à {formatTime(signedAt)}
                         </Text>
-                      ) : (attendance && !attendance.present) || closed ? (
+                      ) : null}
+                      {correction ? (
+                        <Text style={{ fontSize: 7, color: correction.state === "absent" ? "#b91c1c" : "#92400e" }}>
+                          {CORRECTION_TEXT[correction.state]}
+                          {correction.eventAt ? ` ${formatTime(correction.eventAt)}` : ""} : {correction.reason}
+                        </Text>
+                      ) : state.state === "present" && !signedAt ? (
+                        <Text style={{ fontSize: 7, color: "#6b7280" }}>Présent (saisie BO)</Text>
+                      ) : state.state === "absent" || (state.state === "unknown" && closed) ? (
                         <Text style={{ fontSize: 8, color: "#b91c1c" }}>Absent</Text>
                       ) : null}
                     </View>
@@ -159,6 +180,11 @@ export async function renderAttendanceSheet(documents: SessionDocuments): Promis
               </View>
             ))}
           </View>
+          <Text style={{ marginTop: 8, fontSize: 7, color: "#6b7280" }}>
+            {options.final ? "Feuille définitive" : "Feuille provisoire"} générée le {formatDate(generatedAt)} à{" "}
+            {formatTime(generatedAt)}. Heures en heure de Paris, horodatées par le serveur. Empreinte SHA-256 des
+            émargements : {fingerprint}
+          </Text>
           <OrgFooter organization={organization} />
         </Page>
       ))}
@@ -170,7 +196,7 @@ export async function renderAttendanceSheet(documents: SessionDocuments): Promis
 export async function renderCertificate(documents: SessionDocuments, enrollment: Enrollment): Promise<Buffer> {
   const { session, organization } = documents;
   const attended = session.slots.filter((slot) =>
-    enrollment.attendances.some((item) => item.slotId === slot.id && item.present),
+    attendedSlot(documents.cells.get(`${enrollment.id}:${slot.id}`)?.state ?? "unknown"),
   );
   const first = session.slots[0];
   const last = session.slots.at(-1);

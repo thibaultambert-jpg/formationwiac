@@ -202,11 +202,11 @@ export class SessionError extends Error {}
 export async function updateSessionRecord(tx: Tx, sessionId: string, input: SessionInput) {
   const existingSlots = await tx.sessionSlot.findMany({
     where: { sessionId },
-    include: { _count: { select: { attendances: true } } },
+    include: { _count: { select: { attendances: true, corrections: true } } },
   });
   const keptIds = new Set(input.slots.map((slot) => slot.id).filter(Boolean));
   const removed = existingSlots.filter((slot) => !keptIds.has(slot.id));
-  if (removed.some((slot) => slot._count.attendances > 0)) {
+  if (removed.some((slot) => slot._count.attendances > 0 || slot._count.corrections > 0)) {
     throw new SessionError("Un créneau déjà émargé ne peut pas être supprimé.");
   }
 

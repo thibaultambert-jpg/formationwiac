@@ -84,6 +84,16 @@ enum EvaluationType {
 enum SignatureMethod {
   participant_link
   trainer_device
+  // Accessible alternative to the drawn signature, with the personal link.
+  attestation_checkbox
+}
+
+// Attendance correction declared by the trainer or an admin (append-only).
+enum AttendanceState {
+  present
+  absent
+  late
+  left_early
 }
 
 enum TokenPurpose {
@@ -252,9 +262,11 @@ model SessionSlot {
   startsAt  DateTime @map("starts_at") @db.Timestamptz
   endsAt    DateTime @map("ends_at") @db.Timestamptz
 
-  session           TrainingSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session           TrainingSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   attendances       Attendance[]
   trainerSignatures TrainerSignature[]
+  corrections       AttendanceCorrection[]
+  accessTokens      AccessToken[]
 
   @@index([sessionId, startsAt])
   @@map("session_slots")
@@ -354,12 +366,13 @@ model Enrollment {
   agreementWaivedById   String?          @map("agreement_waived_by_id") @db.Uuid
   updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
-  session        TrainingSession @relation(fields: [sessionId], references: [id])
-  participant    Participant     @relation(fields: [participantId], references: [id])
-  convention     Convention?     @relation(fields: [conventionId], references: [id])
-  enrolledBy     User?           @relation("EnrolledBy", fields: [enrolledById], references: [id])
-  billingCompany Company?        @relation(fields: [billingCompanyId], references: [id])
+  session        TrainingSession        @relation(fields: [sessionId], references: [id])
+  participant    Participant            @relation(fields: [participantId], references: [id])
+  convention     Convention?            @relation(fields: [conventionId], references: [id])
+  enrolledBy     User?                  @relation("EnrolledBy", fields: [enrolledById], references: [id])
+  billingCompany Company?               @relation(fields: [billingCompanyId], references: [id])
   attendances    Attendance[]
+  corrections    AttendanceCorrection[]
   evaluations    Evaluation[]
   documents      Document[]
   accessTokens   AccessToken[]
@@ -401,15 +414,24 @@ model Convention {
   @@map("conventions")
 }
 
+// Signature of a participant for one slot. Append-only (database triggers):
+// corrections go to attendance_corrections; only the retention purge may
+// clear the technical data. `recordHash` is the SHA-256 fingerprint of the
+// record (participant, session, slot, server timestamp, signature image).
 model Attendance {
-  id            String           @id @default(uuid(7)) @db.Uuid
-  enrollmentId  String           @map("enrollment_id") @db.Uuid
-  slotId        String           @map("slot_id") @db.Uuid
-  present       Boolean          @default(false)
-  signaturePath String?          @map("signature_path")
-  signedAt      DateTime?        @map("signed_at") @db.Timestamptz
-  ipAddress     String?          @map("ip_address")
-  method        SignatureMethod?
+  id              String           @id @default(uuid(7)) @db.Uuid
+  enrollmentId    String           @map("enrollment_id") @db.Uuid
+  slotId          String           @map("slot_id") @db.Uuid
+  // Legacy rows (before the audit) may be admin marks without signature.
+  present         Boolean          @default(false)
+  signaturePath   String?          @map("signature_path")
+  signedAt        DateTime?        @map("signed_at") @db.Timestamptz
+  ipAddress       String?          @map("ip_address")
+  userAgent       String?          @map("user_agent")
+  tokenId         String?          @map("token_id") @db.Uuid
+  method          SignatureMethod?
+  signatureSha256 String?          @map("signature_sha256")
+  recordHash      String?          @map("record_hash")
 
   enrollment Enrollment  @relation(fields: [enrollmentId], references: [id])
   slot       SessionSlot @relation(fields: [slotId], references: [id])
@@ -419,13 +441,41 @@ model Attendance {
   @@map("attendances")
 }
 
+// Append-only correction of a participant's attendance for one slot (absence,
+// lateness, early departure, presence without signature), with its reason and
+// author. The latest correction wins over the signature.
+model AttendanceCorrection {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  enrollmentId    String          @map("enrollment_id") @db.Uuid
+  slotId          String          @map("slot_id") @db.Uuid
+  state           AttendanceState
+  // Arrival time (late) or departure time (left early).
+  eventAt         DateTime?       @map("event_at") @db.Timestamptz
+  reason          String
+  authorUserId    String?         @map("author_user_id") @db.Uuid
+  authorTrainerId String?         @map("author_trainer_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  recordHash      String          @map("record_hash")
+
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id])
+  slot       SessionSlot @relation(fields: [slotId], references: [id])
+
+  @@index([enrollmentId, slotId, createdAt])
+  @@map("attendance_corrections")
+}
+
 // Trainer signature per slot, printed on the attendance sheet.
 model TrainerSignature {
-  id            String   @id @default(uuid(7)) @db.Uuid
-  slotId        String   @map("slot_id") @db.Uuid
-  trainerId     String   @map("trainer_id") @db.Uuid
-  signaturePath String   @map("signature_path")
-  signedAt      DateTime @map("signed_at") @db.Timestamptz
+  id              String   @id @default(uuid(7)) @db.Uuid
+  slotId          String   @map("slot_id") @db.Uuid
+  trainerId       String   @map("trainer_id") @db.Uuid
+  signaturePath   String   @map("signature_path")
+  signedAt        DateTime @map("signed_at") @db.Timestamptz
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  tokenId         String?  @map("token_id") @db.Uuid
+  signatureSha256 String?  @map("signature_sha256")
+  recordHash      String?  @map("record_hash")
 
   slot    SessionSlot @relation(fields: [slotId], references: [id])
   trainer Trainer     @relation(fields: [trainerId], references: [id])
@@ -444,7 +494,12 @@ model AccessToken {
   enrollmentId String?      @map("enrollment_id") @db.Uuid
   sessionId    String?      @map("session_id") @db.Uuid
   trainerId    String?      @map("trainer_id") @db.Uuid
+  // Participant attendance links are issued per slot and used once (C2).
+  slotId       String?      @map("slot_id") @db.Uuid
+  // Valid from (attendance links open shortly before their slot).
+  validFrom    DateTime?    @map("valid_from") @db.Timestamptz
   expiresAt    DateTime     @map("expires_at") @db.Timestamptz
+  consumedAt   DateTime?    @map("consumed_at") @db.Timestamptz
   lastUsedAt   DateTime?    @map("last_used_at") @db.Timestamptz
   revokedAt    DateTime?    @map("revoked_at") @db.Timestamptz
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
@@ -452,6 +507,7 @@ model AccessToken {
   enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id])
   session    TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   trainer    Trainer?         @relation(fields: [trainerId], references: [id])
+  slot       SessionSlot?     @relation(fields: [slotId], references: [id], onDelete: Cascade)
 
   @@index([enrollmentId, purpose])
   @@index([sessionId, trainerId])
@@ -505,6 +561,8 @@ model Document {
   sentAt         DateTime?    @map("sent_at") @db.Timestamptz
   gmailMessageId String?      @map("gmail_message_id")
   error          String?
+  // SHA-256 of the stored file: frozen documents can be verified (C7, I2).
+  sha256         String?      @map("sha256")
   // Idempotency key of automatic sends (e.g. "reminder:<enrollmentId>").
   dedupKey       String?      @unique @map("dedup_key")
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
@@ -554,6 +612,9 @@ model OrganizationSettings {
   coldEvaluationDays        Int      @default(60) @map("cold_evaluation_days")
   evaluationReminderDays    Int      @default(5) @map("evaluation_reminder_days")
   dataRetentionYears        Int      @default(5) @map("data_retention_years")
+  // Personal attendance links: usable from N minutes before the slot until N minutes after its end.
+  attendanceMarginBefore    Int      @default(30) @map("attendance_margin_before")
+  attendanceMarginAfter     Int      @default(60) @map("attendance_margin_after")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("organization_settings")

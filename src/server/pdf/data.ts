@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { sheetFingerprint, slotAttendance, type SlotAttendance } from "@/server/domain/attendance-proof";
 import { readStoredFile } from "@/server/storage";
 
 export type ImageData = { data: Buffer; format: "png" | "jpg" };
@@ -52,7 +53,11 @@ export async function loadSessionDocuments(sessionId: string) {
       trainers: { include: { trainer: true } },
       enrollments: {
         where: { status: { in: ["confirmed", "present", "absent"] } },
-        include: { participant: { include: { company: true } }, attendances: true },
+        include: {
+          participant: { include: { company: true } },
+          attendances: true,
+          corrections: { orderBy: { createdAt: "asc" } },
+        },
       },
     },
   });
@@ -61,7 +66,7 @@ export async function loadSessionDocuments(sessionId: string) {
   const signatures = new Map<string, ImageData | null>();
   for (const enrollment of session.enrollments) {
     for (const attendance of enrollment.attendances) {
-      if (attendance.present)
+      if (attendance.signaturePath)
         signatures.set(`${enrollment.id}:${attendance.slotId}`, await image(attendance.signaturePath));
     }
   }
@@ -70,6 +75,32 @@ export async function loadSessionDocuments(sessionId: string) {
     for (const signature of slot.trainerSignatures) {
       trainerSignatures.set(`${signature.trainerId}:${slot.id}`, await image(signature.signaturePath));
     }
+  }
+
+  // Attendance state of each enrollment and slot (signature, then the latest correction).
+  const cells = new Map<
+    string,
+    SlotAttendance & {
+      attendance: (typeof session.enrollments)[number]["attendances"][number] | null;
+      correction: (typeof session.enrollments)[number]["corrections"][number] | null;
+    }
+  >();
+  const hashes: string[] = [];
+  for (const enrollment of session.enrollments) {
+    for (const slot of session.slots) {
+      const attendance = enrollment.attendances.find((item) => item.slotId === slot.id) ?? null;
+      const corrections = enrollment.corrections.filter((item) => item.slotId === slot.id);
+      cells.set(`${enrollment.id}:${slot.id}`, {
+        ...slotAttendance({ attendance, corrections }),
+        attendance,
+        correction: corrections.at(-1) ?? null,
+      });
+      if (attendance?.recordHash) hashes.push(attendance.recordHash);
+      hashes.push(...corrections.map((item) => item.recordHash));
+    }
+  }
+  for (const slot of session.slots) {
+    for (const signature of slot.trainerSignatures) if (signature.recordHash) hashes.push(signature.recordHash);
   }
 
   const enrollments = [...session.enrollments].sort((a, b) =>
@@ -82,6 +113,9 @@ export async function loadSessionDocuments(sessionId: string) {
     session: { ...session, enrollments },
     signatures,
     trainerSignatures,
+    cells,
+    /** SHA-256 of the attendance record fingerprints, printed on the sheet (C7). */
+    fingerprint: sheetFingerprint(hashes),
     organization: await loadOrganization(),
   };
 }

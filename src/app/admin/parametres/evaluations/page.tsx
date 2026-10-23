@@ -28,6 +28,8 @@ export default async function EvaluationSettingsPage() {
             reminderDaysBefore: settings?.reminderDaysBefore ?? 3,
             coldEvaluationDays: settings?.coldEvaluationDays ?? 60,
             evaluationReminderDays: settings?.evaluationReminderDays ?? 5,
+            attendanceMarginBefore: settings?.attendanceMarginBefore ?? 30,
+            attendanceMarginAfter: settings?.attendanceMarginAfter ?? 60,
           }}
         />
       </section>
