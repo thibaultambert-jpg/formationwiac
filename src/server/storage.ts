@@ -47,7 +47,9 @@ function supabaseConfig() {
   if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
     return {
       url: env.SUPABASE_URL.replace(/\/$/, ""),
-      key: env.SUPABASE_SERVICE_ROLE_KEY,
+      // Both headers: legacy service_role JWTs work with either, new secret keys
+      // (sb_secret_…) are only accepted through `apikey`.
+      auth: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
       bucket: env.SUPABASE_STORAGE_BUCKET,
     };
   }
@@ -97,7 +99,7 @@ async function writeObject(storagePath: string, body: Buffer, contentType: strin
   if (supabase) {
     const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.bucket}/${storagePath}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${supabase.key}`, "Content-Type": contentType, "x-upsert": "false" },
+      headers: { ...supabase.auth, "Content-Type": contentType, "x-upsert": "false" },
       body: new Uint8Array(body),
     });
     if (!response.ok) throw new Error(`Supabase Storage upload failed: ${response.status} ${await response.text()}`);
@@ -115,7 +117,7 @@ export async function deleteStoredFiles(storagePaths: string[]): Promise<void> {
   if (supabase) {
     const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.bucket}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${supabase.key}`, "Content-Type": "application/json" },
+      headers: { ...supabase.auth, "Content-Type": "application/json" },
       body: JSON.stringify({ prefixes: storagePaths }),
     });
     if (!response.ok) throw new Error(`Supabase Storage delete failed: ${response.status}`);
@@ -131,7 +133,7 @@ export async function readStoredFile(storagePath: string): Promise<{ body: Buffe
 
   if (supabase) {
     const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.bucket}/${storagePath}`, {
-      headers: { Authorization: `Bearer ${supabase.key}` },
+      headers: supabase.auth,
     });
     if (response.status === 404 || response.status === 400) return null;
     if (!response.ok) throw new Error(`Supabase Storage download failed: ${response.status}`);

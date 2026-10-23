@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:vercel": "if [ \"$VERCEL_ENV\" = production ]; then pnpm db:deploy && pnpm db:seed; fi && pnpm build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "prisma generate && next typegen && tsc --noEmit",
