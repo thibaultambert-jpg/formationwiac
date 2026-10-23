@@ -1,0 +1,348 @@
+import "server-only";
+import type { DocumentType, EvaluationType } from "@/generated/prisma/client";
+import { db } from "@/lib/db";
+import { getEnv } from "@/lib/env";
+import { audit } from "@/server/audit";
+import { presenceAtClosure } from "@/server/domain/automation";
+import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
+import type { MailAttachment } from "@/server/email/mime";
+import { sessionVariables } from "@/server/email/notifications";
+import { sendEmail } from "@/server/email/send";
+import { renderTemplate } from "@/server/email/template";
+import { loadSessionDocuments, type SessionDocuments } from "@/server/pdf/data";
+import { renderAttendanceSheet, renderCertificate, renderConvocation } from "@/server/pdf/documents";
+import { readStoredFile, storeBuffer } from "@/server/storage";
+import { issueToken } from "@/server/tokens";
+
+const DAY = 24 * 3_600_000;
+const EVALUATION_LINK_DAYS = 30;
+
+export type SendReport = { sent: number; skipped: number; failed: number };
+const emptyReport = (): SendReport => ({ sent: 0, skipped: 0, failed: 0 });
+
+function count(report: SendReport, result: { ok: boolean; skipped?: boolean }) {
+  if (result.skipped) report.skipped++;
+  else if (result.ok) report.sent++;
+  else report.failed++;
+}
+
+function appUrl(path: string): string {
+  return `${getEnv().APP_URL.replace(/\/$/, "")}${path}`;
+}
+
+async function template(key: DocumentType) {
+  return (
+    (await db.emailTemplate.findUnique({ where: { key } })) ?? DEFAULT_EMAIL_TEMPLATES.find((item) => item.key === key)!
+  );
+}
+
+function safeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function pdfFilename(
+  kind: string,
+  documents: SessionDocuments,
+  enrollment?: SessionDocuments["session"]["enrollments"][number],
+): string {
+  const person = enrollment ? `-${enrollment.participant.lastName}-${enrollment.participant.firstName}` : "";
+  return `${safeName(`${kind}-${documents.session.reference}${person}`)}.pdf`;
+}
+
+/** Stores a generated PDF and traces it in `documents`. */
+async function storePdf(type: DocumentType, buffer: Buffer, sessionId: string, enrollmentId: string | null) {
+  const filePath = await storeBuffer(`documents/${sessionId}`, "pdf", buffer, "application/pdf");
+  return db.document.create({ data: { type, sessionId, enrollmentId, filePath, generatedAt: new Date() } });
+}
+
+async function requireDocuments(sessionId: string): Promise<SessionDocuments> {
+  const documents = await loadSessionDocuments(sessionId);
+  if (!documents) throw new Error(`Session ${sessionId} not found`);
+  return documents;
+}
+
+function activeEnrollments(documents: SessionDocuments, statuses: readonly string[]) {
+  return documents.session.enrollments.filter(
+    (enrollment) => statuses.includes(enrollment.status) && !enrollment.participant.anonymizedAt,
+  );
+}
+
+/** Convocation PDF + program PDF to every confirmed participant (manual BO action). */
+export async function sendConvocations(sessionId: string, actorId: string): Promise<SendReport> {
+  const documents = await requireDocuments(sessionId);
+  const report = emptyReport();
+  const mail = await template("convocation");
+  const common = await sessionVariables(documents.session);
+  const program = documents.session.training.programPdfPath
+    ? await readStoredFile(documents.session.training.programPdfPath)
+    : null;
+
+  for (const enrollment of activeEnrollments(documents, ["confirmed"])) {
+    const pdf = await renderConvocation(documents, enrollment);
+    await storePdf("convocation", pdf, sessionId, enrollment.id);
+    const attachments: MailAttachment[] = [
+      { filename: pdfFilename("convocation", documents, enrollment), contentType: "application/pdf", content: pdf },
+    ];
+    if (program)
+      attachments.push({
+        filename: `programme-${safeName(documents.session.training.title)}.pdf`,
+        contentType: "application/pdf",
+        content: program.body,
+      });
+    const variables = { ...common, prenom: enrollment.participant.firstName, nom: enrollment.participant.lastName };
+    count(
+      report,
+      await sendEmail({
+        type: "convocation",
+        to: enrollment.participant.email,
+        subject: renderTemplate(mail.subject, variables),
+        text: renderTemplate(mail.body, variables),
+        attachments,
+        sessionId,
+        enrollmentId: enrollment.id,
+      }),
+    );
+  }
+  await audit(db, {
+    userId: actorId,
+    action: "send",
+    entity: "session",
+    entityId: sessionId,
+    after: { type: "convocation", ...report },
+  });
+  return report;
+}
+
+/**
+ * Personal attendance links: to confirmed participants and to the trainers
+ * (with the list of enrollees). `day` is the Paris day for automatic sends,
+ * used as dedup key; manual sends are never deduplicated.
+ */
+export async function sendAttendanceLinks(
+  sessionId: string,
+  options: { day?: string; actorId?: string | null } = {},
+): Promise<SendReport> {
+  const documents = await requireDocuments(sessionId);
+  const { session } = documents;
+  const report = emptyReport();
+  const lastEnd = session.slots.at(-1)?.endsAt ?? new Date();
+  const expiresAt = new Date(lastEnd.getTime() + DAY);
+  const common = await sessionVariables(session);
+  const participantMail = await template("attendance_link");
+  const trainerMail = await template("trainer_attendance_link");
+  const enrollments = activeEnrollments(documents, ["confirmed", "present"]);
+
+  for (const enrollment of enrollments) {
+    const token = await issueToken(db, { purpose: "attendance", enrollmentId: enrollment.id, expiresAt });
+    const variables = {
+      ...common,
+      prenom: enrollment.participant.firstName,
+      nom: enrollment.participant.lastName,
+      lien_emargement: appUrl(`/emargement/${token}`),
+    };
+    count(
+      report,
+      await sendEmail({
+        type: "attendance_link",
+        to: enrollment.participant.email,
+        subject: renderTemplate(participantMail.subject, variables),
+        text: renderTemplate(participantMail.body, variables),
+        sessionId,
+        enrollmentId: enrollment.id,
+        dedupKey: options.day ? `attendance_link:${enrollment.id}:${options.day}` : undefined,
+      }),
+    );
+  }
+
+  const list = enrollments
+    .map(
+      (enrollment) =>
+        `- ${enrollment.participant.firstName} ${enrollment.participant.lastName}${enrollment.participant.company ? ` (${enrollment.participant.company.name})` : ""}`,
+    )
+    .join("\n");
+  for (const { trainer } of session.trainers) {
+    const token = await issueToken(db, { purpose: "trainer_attendance", sessionId, trainerId: trainer.id, expiresAt });
+    const variables = {
+      ...common,
+      prenom: trainer.firstName,
+      nom: trainer.lastName,
+      inscrits: list || "Aucun inscrit",
+      lien_emargement: appUrl(`/emargement/formateur/${token}`),
+    };
+    count(
+      report,
+      await sendEmail({
+        type: "trainer_attendance_link",
+        to: trainer.email,
+        subject: renderTemplate(trainerMail.subject, variables),
+        text: renderTemplate(trainerMail.body, variables),
+        sessionId,
+        dedupKey: options.day ? `trainer_attendance_link:${sessionId}:${trainer.id}:${options.day}` : undefined,
+      }),
+    );
+  }
+  if (options.actorId !== undefined) {
+    await audit(db, {
+      userId: options.actorId,
+      action: "send",
+      entity: "session",
+      entityId: sessionId,
+      after: { type: "attendance_link", day: options.day ?? null, ...report },
+    });
+  }
+  return report;
+}
+
+/** Hot or cold evaluation request to present participants who have not answered yet. */
+export async function sendEvaluationRequests(
+  sessionId: string,
+  type: EvaluationType,
+  options: { automatic: boolean; actorId: string | null },
+): Promise<SendReport> {
+  const documents = await requireDocuments(sessionId);
+  const report = emptyReport();
+  const mail = await template("evaluation_request");
+  const common = await sessionVariables(documents.session);
+  for (const enrollment of activeEnrollments(documents, ["present"])) {
+    const evaluation = await db.evaluation.upsert({
+      where: { enrollmentId_type: { enrollmentId: enrollment.id, type } },
+      update: {},
+      create: { enrollmentId: enrollment.id, type },
+    });
+    if (evaluation.submittedAt) {
+      report.skipped++;
+      continue;
+    }
+    const token = await issueToken(db, {
+      purpose: type === "hot" ? "hot_evaluation" : "cold_evaluation",
+      enrollmentId: enrollment.id,
+      expiresAt: new Date(Date.now() + EVALUATION_LINK_DAYS * DAY),
+    });
+    const variables = {
+      ...common,
+      prenom: enrollment.participant.firstName,
+      nom: enrollment.participant.lastName,
+      lien_evaluation: appUrl(`/evaluation/${token}`),
+    };
+    const result = await sendEmail({
+      type: "evaluation_request",
+      to: enrollment.participant.email,
+      subject: renderTemplate(mail.subject, variables) + (type === "cold" ? " (à froid)" : ""),
+      text: renderTemplate(mail.body, variables),
+      sessionId,
+      enrollmentId: enrollment.id,
+      dedupKey: options.automatic ? `evaluation:${type}:${enrollment.id}` : undefined,
+    });
+    count(report, result);
+    if (result.ok)
+      await db.evaluation.update({ where: { id: evaluation.id }, data: { sentAt: evaluation.sentAt ?? new Date() } });
+  }
+  if (!options.automatic) {
+    await audit(db, {
+      userId: options.actorId,
+      action: "send",
+      entity: "session",
+      entityId: sessionId,
+      after: { type: `evaluation_${type}`, ...report },
+    });
+  }
+  return report;
+}
+
+/** Certificate PDF to every present participant (automatic at closure, or from the BO). */
+export async function sendCertificates(
+  sessionId: string,
+  options: { automatic: boolean; actorId: string | null },
+): Promise<SendReport> {
+  const documents = await requireDocuments(sessionId);
+  const report = emptyReport();
+  const mail = await template("certificate");
+  const common = await sessionVariables(documents.session);
+  for (const enrollment of activeEnrollments(documents, ["present"])) {
+    const dedupKey = options.automatic ? `certificate:${enrollment.id}` : undefined;
+    if (dedupKey && (await db.document.findUnique({ where: { dedupKey } }))) {
+      report.skipped++;
+      continue;
+    }
+    const pdf = await renderCertificate(documents, enrollment);
+    await storePdf("certificate", pdf, sessionId, enrollment.id);
+    const variables = { ...common, prenom: enrollment.participant.firstName, nom: enrollment.participant.lastName };
+    count(
+      report,
+      await sendEmail({
+        type: "certificate",
+        to: enrollment.participant.email,
+        subject: renderTemplate(mail.subject, variables),
+        text: renderTemplate(mail.body, variables),
+        attachments: [
+          { filename: pdfFilename("attestation", documents, enrollment), contentType: "application/pdf", content: pdf },
+        ],
+        sessionId,
+        enrollmentId: enrollment.id,
+        dedupKey,
+      }),
+    );
+  }
+  if (!options.automatic) {
+    await audit(db, {
+      userId: options.actorId,
+      action: "send",
+      entity: "session",
+      entityId: sessionId,
+      after: { type: "certificate", ...report },
+    });
+  }
+  return report;
+}
+
+/**
+ * Closes a session after its last slot (rule 7): status completed, then each
+ * confirmed enrollment becomes present or absent (rule 8). Certificates and
+ * the hot evaluation are sent to the present participants.
+ */
+export async function closeSession(sessionId: string, actorId: string | null) {
+  const session = await db.trainingSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    include: {
+      enrollments: { where: { status: "confirmed" }, include: { attendances: { where: { present: true } } } },
+    },
+  });
+  if (session.status !== "published" && session.status !== "full" && session.status !== "draft") return null;
+
+  await db.$transaction(async (tx) => {
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { status: "completed" } });
+    for (const enrollment of session.enrollments) {
+      const status = presenceAtClosure(enrollment.attendances.length);
+      await tx.enrollment.update({ where: { id: enrollment.id }, data: { status } });
+      await audit(tx, {
+        userId: actorId,
+        action: "status_change",
+        entity: "enrollment",
+        entityId: enrollment.id,
+        before: { status: "confirmed" },
+        after: { status, closure: true },
+      });
+    }
+    await audit(tx, {
+      userId: actorId,
+      action: "status_change",
+      entity: "session",
+      entityId: sessionId,
+      before: { status: session.status },
+      after: { status: "completed" },
+    });
+  });
+  const certificates = await sendCertificates(sessionId, { automatic: true, actorId });
+  const evaluations = await sendEvaluationRequests(sessionId, "hot", { automatic: true, actorId });
+  return { certificates, evaluations };
+}
+
+/** Attendance sheet PDF, regenerated on demand. */
+export async function attendanceSheet(sessionId: string) {
+  const documents = await requireDocuments(sessionId);
+  return { documents, pdf: await renderAttendanceSheet(documents) };
+}
