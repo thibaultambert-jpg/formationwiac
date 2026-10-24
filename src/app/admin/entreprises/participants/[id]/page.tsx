@@ -12,6 +12,8 @@ import { db } from "@/lib/db";
 import { formatDate, formatDateRange } from "@/lib/dates";
 import { ENROLLMENT_STATUS_LABELS, ENROLLMENT_STATUS_TONES, PARTICIPANT_TYPE_LABELS } from "@/lib/labels";
 import { displayName, requireRole } from "@/server/auth/guards";
+import { legalHoldAction } from "@/app/admin/parametres/donnees/actions";
+import { LegalHoldPanel } from "@/components/privacy/legal-hold-panel";
 import { AnonymizeDialog } from "../anonymize-dialog";
 
 export const metadata: Metadata = { title: "Participant" };
@@ -98,6 +100,12 @@ export default async function ParticipantPage({ params }: PageProps<"/admin/entr
         </dd>
         <dt className="text-muted-foreground">Créé le</dt>
         <dd>{formatDate(participant.createdAt)}</dd>
+        {participant.type === "internal" ? (
+          <>
+            <dt className="text-muted-foreground">Départ</dt>
+            <dd>{participant.user?.leftAt ? formatDate(participant.user.leftAt) : "En poste"}</dd>
+          </>
+        ) : null}
       </dl>
 
       <section aria-labelledby="participant-enrollments" className="mb-8 space-y-3">
@@ -137,6 +145,15 @@ export default async function ParticipantPage({ params }: PageProps<"/admin/entr
           </Table>
         )}
       </section>
+
+      <div className="mb-8">
+        <LegalHoldPanel
+          action={legalHoldAction}
+          kind="participant"
+          id={participant.id}
+          hold={{ reason: participant.legalHoldReason, at: participant.legalHoldAt }}
+        />
+      </div>
 
       <section aria-labelledby="participant-history" className="space-y-3">
         <h2 id="participant-history" className="text-lg font-semibold">

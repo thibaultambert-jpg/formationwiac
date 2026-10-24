@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { parisDateTimeToUtc } from "@/lib/dates";
 import { audit } from "@/server/audit";
 import { requireRole } from "@/server/auth/guards";
 import { checkUserAdministration, ROLES } from "@/server/auth/policy";
@@ -17,7 +18,10 @@ export async function updateUser(_state: ActionState, formData: FormData): Promi
   const role = roleSchema.safeParse(text(formData, "role"));
   const active = formData.get("active") === "on";
   const department = text(formData, "department");
+  const leftAtInput = text(formData, "leftAt");
+  const leftAt = leftAtInput ? parisDateTimeToUtc(leftAtInput, "00:00") : null;
   if (!id || !role.success) return errorState(formData, "Rôle invalide.");
+  if (leftAtInput && !leftAt) return errorState(formData, "Date invalide.", { leftAt: "Date invalide." });
 
   const target = await db.user.findUnique({ where: { id } });
   if (!target) return errorState(formData, "Utilisateur introuvable.");
@@ -28,7 +32,7 @@ export async function updateUser(_state: ActionState, formData: FormData): Promi
     if (!check.ok) return errorState(formData, check.reason);
   }
 
-  await db.user.update({ where: { id }, data: { role: role.data, active, department } });
+  await db.user.update({ where: { id }, data: { role: role.data, active, department, leftAt } });
   if (role.data !== target.role) {
     await audit(db, {
       userId: actor.id,
@@ -39,14 +43,15 @@ export async function updateUser(_state: ActionState, formData: FormData): Promi
       after: { role: role.data },
     });
   }
-  if (active !== target.active || department !== target.department) {
+  const leftChanged = (leftAt?.getTime() ?? null) !== (target.leftAt?.getTime() ?? null);
+  if (active !== target.active || department !== target.department || leftChanged) {
     await audit(db, {
       userId: actor.id,
       action: "update",
       entity: "user",
       entityId: id,
-      before: { active: target.active, department: target.department },
-      after: { active, department },
+      before: { active: target.active, department: target.department, leftAt: target.leftAt },
+      after: { active, department, leftAt },
     });
   }
 

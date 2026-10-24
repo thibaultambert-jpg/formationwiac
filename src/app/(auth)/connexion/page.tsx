@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,15 @@ export default async function LoginPage({ searchParams }: PageProps<"/connexion"
             Se connecter avec Google
           </Button>
         </form>
+        <p className="text-muted-foreground mt-4 text-xs">
+          <Link href="/confidentialite" className="underline underline-offset-4">
+            Confidentialité
+          </Link>{" "}
+          ·{" "}
+          <Link href="/mentions-legales" className="underline underline-offset-4">
+            Mentions légales
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

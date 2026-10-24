@@ -9,7 +9,11 @@ export async function sessionCompliance(sessionId: string) {
     include: {
       enrollments: {
         where: { status: { not: "cancelled" } },
-        include: { participant: true, convention: { select: { status: true, reference: true } } },
+        include: {
+          participant: true,
+          convention: { select: { status: true, reference: true } },
+          documents: { where: { type: "pre_training_information", sentAt: { not: null } }, select: { sentAt: true } },
+        },
         orderBy: { enrolledAt: "asc" },
       },
     },
@@ -21,6 +25,7 @@ export async function sessionCompliance(sessionId: string) {
       inScope,
       conventionSigned: enrollment.convention?.status === "signed",
       agreementWaived: enrollment.agreementWaivedAt !== null,
+      preInformationSent: enrollment.documents.length > 0,
     });
     return { enrollment, requirements };
   });

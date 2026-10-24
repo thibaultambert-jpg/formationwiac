@@ -19,6 +19,19 @@ export const TEMPLATE_VARIABLES = {
   a_prevoir: "Matériel ou documents à prévoir",
   entreprise: "Entreprise cliente (convention)",
   reference_convention: "Référence de la convention",
+  mention_rgpd: "Mention d'information sur les données personnelles",
+  objectifs: "Objectifs de la formation",
+  prerequis: "Prérequis",
+  duree: "Durée de la formation",
+  modalite: "Modalité (présentiel, distanciel…)",
+  methodes: "Méthodes pédagogiques",
+  modalites_evaluation: "Modalités d'évaluation",
+  accessibilite: "Accessibilité et adaptations",
+  delai_acces: "Délai d'accès",
+  referent_handicap: "Référent handicap",
+  referent_pedagogique: "Référent pédagogique",
+  referent_administratif: "Référent administratif",
+  lien_reglement: "Lien vers le règlement intérieur",
 } as const;
 
 export type TemplateVariables = Partial<Record<keyof typeof TEMPLATE_VARIABLES | string, string>>;
@@ -64,4 +77,9 @@ export function textToHtml(text: string): string {
     )
     .map((paragraph) => `<p style="margin:0 0 1em">${paragraph}</p>`);
   return `<!doctype html><html lang="fr"><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1f2937">${paragraphs.join("")}</body></html>`;
+}
+
+/** Adds the short GDPR notice at the end of an email unless the template already places it (E2). */
+export function withPrivacyNotice(text: string, template: string, notice: string): string {
+  return template.includes("mention_rgpd") ? text : `${text}\n\n—\n${notice}`;
 }

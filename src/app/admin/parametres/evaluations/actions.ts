@@ -143,6 +143,7 @@ export async function runAutomationNow(): Promise<ActionState> {
   const report = await runScheduledTasks(new Date(), actor.id);
   refresh();
   const parts = [
+    `${report.preInformation} information(s) préalable(s)`,
     `${report.reminders} rappel(s)`,
     `${report.attendanceLinks} lien(s) d'émargement`,
     `${report.closedSessions} session(s) clôturée(s)`,

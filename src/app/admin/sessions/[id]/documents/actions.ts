@@ -16,6 +16,7 @@ import {
   sendEvaluationRequests,
   type SendReport,
 } from "@/server/services/session-documents";
+import { sendPreTrainingInformation } from "@/server/services/pre-information";
 
 function summary(label: string, report: SendReport): ActionState {
   const parts = [
@@ -47,6 +48,22 @@ export async function sendConvocationsAction(_state: ActionState, formData: Form
   }
   refresh();
   return summary("Convocations", report);
+}
+
+export async function sendPreInformationAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const session = await loadSession(formData);
+  if (!session) return errorState(formData, "Session introuvable.");
+  if (session.status === "cancelled") return errorState(formData, "Session annulée.");
+  const enrollmentId = text(formData, "enrollmentId");
+  const report = await sendPreTrainingInformation(session.id, {
+    actorId: actor.id,
+    ...(enrollmentId ? { enrollmentIds: [enrollmentId] } : {}),
+  });
+  refresh();
+  if (report.sent + report.failed === 0)
+    return { status: "success", message: "Tous les inscrits ont déjà reçu l'information préalable." };
+  return summary("Informations préalables", report);
 }
 
 export async function sendAttendanceLinksAction(_state: ActionState, formData: FormData): Promise<ActionState> {

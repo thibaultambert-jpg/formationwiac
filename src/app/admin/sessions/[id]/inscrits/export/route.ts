@@ -80,5 +80,10 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
       ];
     }),
   );
-  return csvResponse(csv, `inscrits-${session.reference}`);
+  return csvResponse(csv, `inscrits-${session.reference}`, {
+    userId: user.id,
+    entity: "session",
+    entityId: id,
+    rows: session.enrollments.length,
+  });
 }

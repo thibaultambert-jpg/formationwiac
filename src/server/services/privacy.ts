@@ -5,7 +5,17 @@ import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
 import { withRetentionPurge } from "@/server/retention";
 import { normalizeEmail } from "@/server/auth/policy";
-import { ANONYMIZED_FIRST_NAME, ANONYMIZED_LAST_NAME, anonymizedEmail, retentionCutoff } from "@/server/domain/privacy";
+import {
+  ANONYMIZED_FIRST_NAME,
+  ANONYMIZED_LAST_NAME,
+  anonymizedEmail,
+  daysBefore,
+  monthsBefore,
+  retentionCutoff,
+  retentionExpired,
+  retentionPolicy,
+  type RetentionPolicy,
+} from "@/server/domain/privacy";
 import { EMAIL_DOCUMENT_TYPES } from "@/server/email/default-templates";
 import { deleteStoredFiles } from "@/server/storage";
 
@@ -64,6 +74,7 @@ export async function exportParticipantData(participantId: string) {
       createdAt: participant.createdAt,
       archivedAt: participant.archivedAt,
       anonymizedAt: participant.anonymizedAt,
+      legalHoldReason: participant.legalHoldReason,
     },
     googleAccount: participant.user,
     enrollments: participant.enrollments.map((enrollment) => ({
@@ -118,6 +129,8 @@ export async function anonymizeParticipant(participantId: string, actorId: strin
   });
   if (!participant) throw new PrivacyError("Participant introuvable.");
   if (participant.anonymizedAt) throw new PrivacyError("Ce participant est déjà anonymisé.");
+  if (participant.legalHoldAt)
+    throw new PrivacyError("Ce participant est sous conservation légale : levez-la d'abord.");
   if (participant.user) {
     if (participant.user.id === actorId) throw new PrivacyError("Vous ne pouvez pas anonymiser votre propre compte.");
     if (participant.user.role === "admin" || normalizeEmail(participant.user.email) === getEnv().INITIAL_ADMIN_EMAIL) {
@@ -197,30 +210,57 @@ export async function anonymizeParticipant(participantId: string, actorId: strin
   await deleteStoredFiles(emailFiles.map((file) => file.filePath!).filter(Boolean));
 }
 
-/** Participants whose last training ended before the retention cutoff (or never trained, created before it). */
-export async function participantsPastRetention(now: Date, years: number) {
-  const cutoff = retentionCutoff(now, years);
-  const rows = await db.$queryRaw<{ id: string }[]>`
-    SELECT p.id
+/**
+ * Participants past their retention period (E5): externals after their last
+ * training, internals after leaving; never under legal hold, never admins.
+ */
+export async function participantsPastRetention(now: Date, policy: RetentionPolicy) {
+  const rows = await db.$queryRaw<
+    { id: string; type: "internal" | "external"; last_activity: Date; left_at: Date | null; legal_hold: boolean }[]
+  >`
+    SELECT p.id, p.type::text AS type,
+           coalesce(max(s.ends_at), p.created_at) AS last_activity,
+           max(u.left_at) AS left_at,
+           (p.legal_hold_at IS NOT NULL OR bool_or(ts.legal_hold_at IS NOT NULL)) IS TRUE AS legal_hold
     FROM participants p
     LEFT JOIN enrollments e ON e.participant_id = p.id
+    LEFT JOIN sessions ts ON ts.id = e.session_id
     LEFT JOIN session_slots s ON s.session_id = e.session_id
     LEFT JOIN users u ON u.id = p.user_id
     WHERE p.anonymized_at IS NULL
       AND (u.id IS NULL OR u.role <> 'admin')
-    GROUP BY p.id, p.created_at
-    HAVING coalesce(max(s.ends_at), p.created_at) < ${cutoff}`;
+    GROUP BY p.id`;
+  const ids = rows
+    .filter((row) =>
+      retentionExpired(
+        { type: row.type, lastActivity: row.last_activity, leftAt: row.left_at, legalHold: row.legal_hold },
+        now,
+        policy,
+      ),
+    )
+    .map((row) => row.id);
   return db.participant.findMany({
-    where: { id: { in: rows.map((row) => row.id) } },
+    where: { id: { in: ids } },
     include: { company: { select: { name: true } } },
     orderBy: { lastName: "asc" },
   });
 }
 
-/** Proof files (signatures, generated PDFs) of sessions ended before the retention cutoff. */
-export async function proofFilesPastRetention(now: Date, years: number) {
-  const cutoff = retentionCutoff(now, years);
-  const expiredSessions = { slots: { some: {} }, NOT: { slots: { some: { endsAt: { gte: cutoff } } } } };
+/**
+ * Proof files (signatures, generated PDFs) that can be deleted: sessions
+ * ended before the external cutoff, without legal hold, whose trainees are all
+ * anonymized (an internal still employed keeps the session's proofs).
+ */
+export async function proofFilesPastRetention(now: Date, policy: RetentionPolicy) {
+  const cutoff = retentionCutoff(now, policy.externalYears);
+  const expiredSessions = {
+    legalHoldAt: null,
+    slots: { some: {} },
+    NOT: [
+      { slots: { some: { endsAt: { gte: cutoff } } } },
+      { enrollments: { some: { participant: { anonymizedAt: null } } } },
+    ],
+  } satisfies Prisma.TrainingSessionWhereInput;
   const [attendances, documents, signatures] = await Promise.all([
     db.attendance.findMany({
       where: { signaturePath: { not: null }, slot: { session: expiredSessions } },
@@ -238,8 +278,8 @@ export async function proofFilesPastRetention(now: Date, years: number) {
   return { attendances, documents, signatures, count: attendances.length + documents.length + signatures.length };
 }
 
-export async function purgeProofFiles(now: Date, years: number, actorId: string | null) {
-  const files = await proofFilesPastRetention(now, years);
+export async function purgeProofFiles(now: Date, policy: RetentionPolicy, actorId: string | null) {
+  const files = await proofFilesPastRetention(now, policy);
   if (files.count === 0) return 0;
   await deleteStoredFiles([
     ...files.attendances.map((row) => row.signaturePath!),
@@ -262,7 +302,80 @@ export async function purgeProofFiles(now: Date, years: number, actorId: string 
     action: "purge",
     entity: "settings",
     entityId: "retention",
-    after: { files: files.count, years },
+    after: { files: files.count, years: policy.externalYears },
   });
   return files.count;
+}
+
+/**
+ * Technical data past its period (E5): IP addresses and browsers of
+ * signatures older than the technical period (the record fingerprints do not
+ * include them), and links expired or revoked for longer than the link period.
+ * Sessions under legal hold keep everything.
+ */
+export async function purgeTechnicalData(now: Date, policy: RetentionPolicy, actorId: string | null) {
+  const technicalCutoff = monthsBefore(now, policy.technicalMonths);
+  const tokenCutoff = daysBefore(now, policy.tokenDays);
+  const unheld = { session: { legalHoldAt: null } } satisfies Prisma.SessionSlotWhereInput;
+  const counts = await withRetentionPurge(async (tx) => {
+    const attendances = await tx.attendance.updateMany({
+      where: {
+        signedAt: { lt: technicalCutoff },
+        OR: [{ ipAddress: { not: null } }, { userAgent: { not: null } }],
+        slot: unheld,
+      },
+      data: { ipAddress: null, userAgent: null },
+    });
+    const signatures = await tx.trainerSignature.updateMany({
+      where: {
+        signedAt: { lt: technicalCutoff },
+        OR: [{ ipAddress: { not: null } }, { userAgent: { not: null } }],
+        slot: unheld,
+      },
+      data: { ipAddress: null, userAgent: null },
+    });
+    const tokens = await tx.accessToken.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: tokenCutoff } }, { revokedAt: { lt: tokenCutoff } }],
+        NOT: { session: { legalHoldAt: { not: null } } },
+      },
+    });
+    return { technical: attendances.count + signatures.count, tokens: tokens.count };
+  });
+  if (counts.technical + counts.tokens > 0) {
+    await audit(db, { userId: actorId, action: "purge", entity: "settings", entityId: "technical", after: counts });
+  }
+  return counts;
+}
+
+export async function currentRetentionPolicy(): Promise<RetentionPolicy> {
+  return retentionPolicy(await db.organizationSettings.findUnique({ where: { id: 1 } }));
+}
+
+export class LegalHoldError extends Error {}
+
+/** Places or lifts a legal hold on a session or a participant (E5); a reason is required to place it. */
+export async function setLegalHold(
+  target: { kind: "session" | "participant"; id: string },
+  reason: string | null,
+  actorId: string,
+) {
+  const data = reason
+    ? { legalHoldReason: reason, legalHoldAt: new Date() }
+    : { legalHoldReason: null, legalHoldAt: null };
+  const before =
+    target.kind === "session"
+      ? await db.trainingSession.findUnique({ where: { id: target.id }, select: { legalHoldReason: true } })
+      : await db.participant.findUnique({ where: { id: target.id }, select: { legalHoldReason: true } });
+  if (!before) throw new LegalHoldError("Enregistrement introuvable.");
+  if (target.kind === "session") await db.trainingSession.update({ where: { id: target.id }, data });
+  else await db.participant.update({ where: { id: target.id }, data });
+  await audit(db, {
+    userId: actorId,
+    action: reason ? "legal_hold" : "legal_hold_release",
+    entity: target.kind,
+    entityId: target.id,
+    before,
+    after: { legalHoldReason: reason },
+  });
 }

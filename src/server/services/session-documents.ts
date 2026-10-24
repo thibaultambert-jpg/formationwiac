@@ -6,14 +6,19 @@ import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
 import { attended, linkWindow, sha256, slotAttendance } from "@/server/domain/attendance-proof";
 import { presenceAtClosure } from "@/server/domain/automation";
-import { missingOrganizationIdentifiers } from "@/server/domain/compliance";
+import { isPublicFunding, missingOrganizationIdentifiers, type FundingTypeValue } from "@/server/domain/compliance";
 import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
 import type { MailAttachment } from "@/server/email/mime";
 import { sessionVariables } from "@/server/email/notifications";
 import { sendEmail } from "@/server/email/send";
-import { renderTemplate } from "@/server/email/template";
+import { renderTemplate, withPrivacyNotice } from "@/server/email/template";
 import { loadSessionDocuments, type SessionDocuments } from "@/server/pdf/data";
-import { renderAttendanceSheet, renderCertificate, renderConvocation } from "@/server/pdf/documents";
+import {
+  renderAttendanceSheet,
+  renderCertificate,
+  renderCompletionCertificate,
+  renderConvocation,
+} from "@/server/pdf/documents";
 import { readStoredFile, storeBuffer } from "@/server/storage";
 import { attendanceMargins } from "@/server/services/attendance";
 import { issueToken } from "@/server/tokens";
@@ -71,7 +76,14 @@ export function pdfFilename(
 /** Stores a generated PDF and traces it in `documents`. */
 async function storePdf(type: DocumentType, buffer: Buffer, sessionId: string, enrollmentId: string | null) {
   const filePath = await storeBuffer(`documents/${sessionId}`, "pdf", buffer, "application/pdf");
-  return db.document.create({ data: { type, sessionId, enrollmentId, filePath, generatedAt: new Date() } });
+  return db.document.create({
+    data: { type, sessionId, enrollmentId, filePath, generatedAt: new Date(), sha256: sha256(buffer) },
+  });
+}
+
+/** Trainees who receive a certificate of completion (B6): externals and publicly funded enrollments. */
+export function needsCompletionCertificate(enrollment: { participantType: string; fundingType: FundingTypeValue }) {
+  return enrollment.participantType === "external" || isPublicFunding(enrollment.fundingType);
 }
 
 async function requireDocuments(sessionId: string): Promise<SessionDocuments> {
@@ -111,6 +123,7 @@ export async function sendConvocations(sessionId: string, actorId: string): Prom
         filename: `programme-${safeName(documents.session.training.title)}.pdf`,
         contentType: "application/pdf",
         content: program.body,
+        trace: { kind: "program", version: documents.session.training.programPdfPath ?? undefined },
       });
     const variables = { ...common, prenom: enrollment.participant.firstName, nom: enrollment.participant.lastName };
     count(
@@ -119,7 +132,7 @@ export async function sendConvocations(sessionId: string, actorId: string): Prom
         type: "convocation",
         to: enrollment.participant.email,
         subject: renderTemplate(mail.subject, variables),
-        text: renderTemplate(mail.body, variables),
+        text: withPrivacyNotice(renderTemplate(mail.body, variables), mail.body, common.mention_rgpd!),
         attachments,
         sessionId,
         enrollmentId: enrollment.id,
@@ -323,6 +336,19 @@ export async function sendCertificates(
     }
     const pdf = await renderCertificate(documents, enrollment);
     await storePdf("certificate", pdf, sessionId, enrollment.id);
+    const attachments: MailAttachment[] = [
+      { filename: pdfFilename("attestation", documents, enrollment), contentType: "application/pdf", content: pdf },
+    ];
+    if (needsCompletionCertificate(enrollment)) {
+      const completion = await renderCompletionCertificate(documents, enrollment);
+      await storePdf("completion_certificate", completion, sessionId, enrollment.id);
+      attachments.push({
+        filename: pdfFilename("certificat-realisation", documents, enrollment),
+        contentType: "application/pdf",
+        content: completion,
+        trace: { kind: "completion_certificate" },
+      });
+    }
     const variables = { ...common, prenom: enrollment.participant.firstName, nom: enrollment.participant.lastName };
     count(
       report,
@@ -331,9 +357,7 @@ export async function sendCertificates(
         to: enrollment.participant.email,
         subject: renderTemplate(mail.subject, variables),
         text: renderTemplate(mail.body, variables),
-        attachments: [
-          { filename: pdfFilename("attestation", documents, enrollment), contentType: "application/pdf", content: pdf },
-        ],
+        attachments,
         sessionId,
         enrollmentId: enrollment.id,
         dedupKey,

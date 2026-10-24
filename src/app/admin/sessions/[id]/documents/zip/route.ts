@@ -8,7 +8,7 @@ import { attendanceSheet, pdfFilename } from "@/server/services/session-document
 import { readStoredFile } from "@/server/storage";
 
 // Proofs of a session in one ZIP (lot 4 acceptance criterion): signed attendance
-// sheet, evaluations (answers and synthesis) and certificates.
+// sheet, evaluations (answers and synthesis), certificates and certificates of completion.
 export async function GET(_request: Request, { params }: RouteContext<"/admin/sessions/[id]/documents/zip">) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") return new Response("Accès interdit", { status: 403 });
@@ -32,6 +32,19 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
     files[`attestations/${pdfFilename("attestation", documents, enrollment)}`] = new Uint8Array(
       file ? file.body : await renderCertificate(documents, enrollment),
     );
+  }
+  // Certificates of completion (B6), generated with the certificates: the archived copy only.
+  const completions = await db.document.findMany({
+    where: { sessionId: id, type: "completion_certificate", filePath: { endsWith: ".pdf" } },
+    orderBy: { createdAt: "desc" },
+  });
+  for (const enrollment of documents.session.enrollments) {
+    const archived = completions.find((document) => document.enrollmentId === enrollment.id);
+    const file = archived?.filePath ? await readStoredFile(archived.filePath) : null;
+    if (file)
+      files[`certificats-realisation/${pdfFilename("certificat-realisation", documents, enrollment)}`] = new Uint8Array(
+        file.body,
+      );
   }
   const evaluations = await Promise.all([sessionEvaluations(id, "hot"), sessionEvaluations(id, "cold")]);
   files["evaluations/reponses.csv"] = new TextEncoder().encode(answersCsv(evaluations));

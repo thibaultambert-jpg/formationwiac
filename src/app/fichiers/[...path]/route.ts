@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
+import { audit } from "@/server/audit";
 import { getCurrentUser } from "@/server/auth/guards";
 import { readStoredFile } from "@/server/storage";
+
+const NON_PERSONAL_FOLDERS = ["organisme/", "programmes/", "reglement-interieur/"];
 
 // Authenticated file download. Administrators can read every file; other users
 // only the program PDF of active trainings.
@@ -18,6 +21,10 @@ export async function GET(request: Request, { params }: RouteContext<"/fichiers/
 
   const file = await readStoredFile(storagePath);
   if (!file) return new Response("Fichier introuvable", { status: 404 });
+  // Nominative files (signatures, generated documents, uploads) read by an admin are logged (G2).
+  if (user.role === "admin" && !NON_PERSONAL_FOLDERS.some((folder) => storagePath.startsWith(folder))) {
+    await audit(db, { userId: user.id, action: "download", entity: "file", entityId: storagePath });
+  }
 
   const download = new URL(request.url).searchParams.get("nom");
   const disposition = download ? `attachment; filename*=UTF-8''${encodeURIComponent(download)}` : "inline";

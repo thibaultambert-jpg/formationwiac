@@ -4,6 +4,11 @@ import type { DocumentType } from "@/generated/prisma/enums";
 
 export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body: string }[] = [
   {
+    key: "pre_training_information",
+    subject: "Information préalable : {{formation}}",
+    body: "Bonjour {{prenom}},\n\nVous êtes inscrit(e) à la formation « {{formation}} ». Voici les informations à connaître avant de la suivre.\n\nObjectifs :\n{{objectifs}}\n\nPrérequis : {{prerequis}}\nDurée : {{duree}}\nModalité : {{modalite}}\nDates :\n{{dates}}\nLieu : {{lieu}}\nDélai d'accès : {{delai_acces}}\nMéthodes pédagogiques : {{methodes}}\nModalités d'évaluation : {{modalites_evaluation}}\nAccessibilité et adaptations : {{accessibilite}}\n\nVos contacts :\n- Référent pédagogique : {{referent_pedagogique}}\n- Référent administratif : {{referent_administratif}}\n- Référent handicap : {{referent_handicap}}\n\nLe programme et le règlement intérieur sont joints à ce message ; le règlement est aussi consultable ici : {{lien_reglement}}\n\n{{mention_rgpd}}\n\nCordialement,",
+  },
+  {
     key: "enrollment_confirmation",
     subject: "Confirmation d'inscription : {{formation}}",
     body: "Bonjour {{prenom}},\n\nVotre inscription à la formation « {{formation}} » est confirmée.\n\nDates : {{dates}}\nLieu : {{lieu}}\nLien visio : {{lien_visio}}\n\nVous trouverez en pièce jointe un fichier à ajouter à votre agenda.\n\nÀ bientôt,",
@@ -67,6 +72,7 @@ export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body
 
 /** Email types sent automatically from lot 3; the others arrive with lot 4. */
 export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
+  "pre_training_information",
   "enrollment_confirmation",
   "waitlist_notice",
   "waitlist_promotion",
@@ -82,6 +88,7 @@ export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
 ];
 
 export const EMAIL_TYPE_LABELS: Record<string, string> = {
+  pre_training_information: "Information préalable",
   enrollment_confirmation: "Inscription confirmée",
   waitlist_notice: "Placement en liste d'attente",
   waitlist_promotion: "Place libérée (sortie de liste d'attente)",
@@ -98,6 +105,7 @@ export const EMAIL_TYPE_LABELS: Record<string, string> = {
 
 /** Document types that are emails (the others are generated PDF files). */
 export const EMAIL_DOCUMENT_TYPES: DocumentType[] = [
+  "pre_training_information",
   "enrollment_confirmation",
   "waitlist_notice",
   "waitlist_promotion",

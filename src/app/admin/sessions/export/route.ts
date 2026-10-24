@@ -53,5 +53,11 @@ export async function GET(request: Request) {
       ];
     }),
   );
-  return csvResponse(csv, "sessions");
+  return csvResponse(csv, "sessions", {
+    userId: user.id,
+    entity: "session",
+    entityId: "list",
+    filters: params,
+    rows: sessions.length,
+  });
 }

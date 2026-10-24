@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CheckCircle2, CircleAlert, CircleDashed } from "lucide-react";
+import { legalHoldAction } from "@/app/admin/parametres/donnees/actions";
 import { EmptyState } from "@/components/layout/empty-state";
+import { LegalHoldPanel } from "@/components/privacy/legal-hold-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,7 +22,11 @@ export const metadata: Metadata = { title: "Conformité" };
 export default async function CompliancePage({ params }: PageProps<"/admin/sessions/[id]/conformite">) {
   await requireRole(["admin"]);
   const { id } = await params;
-  if (!(await db.trainingSession.findUnique({ where: { id }, select: { id: true } }))) notFound();
+  const session = await db.trainingSession.findUnique({
+    where: { id },
+    select: { id: true, legalHoldReason: true, legalHoldAt: true },
+  });
+  if (!session) notFound();
   const { inScope, rows, blockingMissing } = await sessionCompliance(id);
 
   return (
@@ -98,6 +104,12 @@ export default async function CompliancePage({ params }: PageProps<"/admin/sessi
           </TableBody>
         </Table>
       )}
+      <LegalHoldPanel
+        action={legalHoldAction}
+        kind="session"
+        id={session.id}
+        hold={{ reason: session.legalHoldReason, at: session.legalHoldAt }}
+      />
     </div>
   );
 }
