@@ -70,6 +70,17 @@ export default async function TrainingPage({ params }: PageProps<"/formations/[s
     }
   }
 
+  const settings = await db.organizationSettings.findUnique({
+    where: { id: 1 },
+    select: { disabilityReferentName: true, disabilityReferentEmail: true, disabilityReferentPhone: true },
+  });
+  const referent = [
+    settings?.disabilityReferentName,
+    settings?.disabilityReferentEmail,
+    settings?.disabilityReferentPhone,
+  ]
+    .filter(Boolean)
+    .join("\n");
   const nextSession = training.sessions[0]?.slots[0]?.startsAt;
   let sectionNumber = 0;
 
@@ -127,6 +138,28 @@ export default async function TrainingPage({ params }: PageProps<"/formations/[s
               ) : null}
             </Section>
           ) : null}
+          {training.teachingMethods || training.evaluationMethods || training.accessDelay ? (
+            <Section number={++sectionNumber} title="Déroulement">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {training.teachingMethods ? (
+                  <InfoCard title="Méthodes pédagogiques">{training.teachingMethods}</InfoCard>
+                ) : null}
+                {training.evaluationMethods ? (
+                  <InfoCard title="Modalités d'évaluation">{training.evaluationMethods}</InfoCard>
+                ) : null}
+                {training.accessDelay ? <InfoCard title="Délai d'accès">{training.accessDelay}</InfoCard> : null}
+              </div>
+            </Section>
+          ) : null}
+          <Section number={++sectionNumber} title="Accessibilité">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <InfoCard title="Situation de handicap">
+                {training.accessibility ??
+                  "Nos formations sont accessibles aux personnes en situation de handicap : contactez le référent handicap pour étudier les aménagements nécessaires."}
+              </InfoCard>
+              {referent ? <InfoCard title="Référent handicap">{referent}</InfoCard> : null}
+            </div>
+          </Section>
         </article>
 
         <aside aria-labelledby="sessions-title" className="space-y-3 lg:sticky lg:top-4 lg:self-start">

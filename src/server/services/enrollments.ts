@@ -95,6 +95,8 @@ export type EnrollInput = {
   actorId: string;
   motivation?: string | null;
   fundingType?: FundingType | null;
+  /** Adaptation need given by the trainee (D8); never written to the audit log. */
+  adaptationNeed?: string | null;
 };
 
 /**
@@ -140,6 +142,7 @@ export async function enrollParticipant(tx: Tx, input: EnrollInput) {
     enrolledById: input.actorId,
     enrolledAt: new Date(),
     motivation: input.motivation ?? null,
+    ...(input.adaptationNeed !== undefined ? { adaptationNeed: input.adaptationNeed } : {}),
     participantType: participant.type,
     fundingType: input.fundingType ?? existing?.fundingType ?? defaultFunding(participant.type),
     cancelledAt: null,

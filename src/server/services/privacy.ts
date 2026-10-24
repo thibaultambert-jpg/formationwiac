@@ -85,6 +85,12 @@ export async function exportParticipantData(participantId: string) {
       source: enrollment.source,
       enrolledAt: enrollment.enrolledAt,
       motivation: enrollment.motivation,
+      // Right of access: the adaptation need is part of the trainee's own data.
+      adaptationNeed: enrollment.adaptationNeed,
+      learningResult: enrollment.learningResult,
+      learningComment: enrollment.learningComment,
+      droppedOutAt: enrollment.droppedOutAt,
+      dropoutReason: enrollment.dropoutReason,
       appliedPrice: enrollment.appliedPrice?.toString() ?? null,
       cancelledAt: enrollment.cancelledAt,
       cancellationReason: enrollment.cancellationReason,
@@ -176,7 +182,10 @@ export async function anonymizeParticipant(participantId: string, actorId: strin
       });
     }
     await tx.company.updateMany({ where: { mainContactId: participant.id }, data: { mainContactId: null } });
-    await tx.enrollment.updateMany({ where: { participantId: participant.id }, data: { motivation: null } });
+    await tx.enrollment.updateMany({
+      where: { participantId: participant.id },
+      data: { motivation: null, adaptationNeed: null, needsAnalysisNote: null },
+    });
     await tx.document.updateMany({
       where: { enrollment: { participantId: participant.id } },
       data: { recipientEmail: null },

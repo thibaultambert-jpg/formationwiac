@@ -91,6 +91,12 @@ export function EnrollDialog({ session, showTrigger }: { session: SessionSummary
             >
               <input type="hidden" name="sessionId" value={session.id} />
               <TextareaField name="motivation" label="Motivation ou besoin (facultatif)" rows={2} />
+              <TextareaField
+                name="adaptationNeed"
+                label="Besoin d'aménagement (facultatif)"
+                hint="Accès, rythme, supports… Décrivez seulement l'aménagement utile, sans information de santé. Visible uniquement du service formation."
+                rows={2}
+              />
               <SubmitButton className="w-full sm:w-auto">
                 {session.full ? "Confirmer (liste d'attente)" : "Confirmer l'inscription"}
               </SubmitButton>
