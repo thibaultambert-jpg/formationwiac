@@ -23,6 +23,8 @@ export type Organization = {
   city: string | null;
   logo: ImageData | null;
   managerSignature: ImageData | null;
+  /** Name and contact of the disability referent (D8). */
+  disabilityReferent: string | null;
 };
 
 export async function loadOrganization(): Promise<Organization> {
@@ -40,6 +42,10 @@ export async function loadOrganization(): Promise<Organization> {
     city: settings?.city ?? null,
     logo: await image(settings?.logoPath),
     managerSignature: await image(settings?.managerSignaturePath),
+    disabilityReferent:
+      [settings?.disabilityReferentName, settings?.disabilityReferentEmail, settings?.disabilityReferentPhone]
+        .filter(Boolean)
+        .join(", ") || null,
   };
 }
 

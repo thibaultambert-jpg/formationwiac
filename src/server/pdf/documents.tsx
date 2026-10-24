@@ -76,6 +76,12 @@ export async function renderConvocation(documents: SessionDocuments, enrollment:
           {organization.name}
           {organization.contactEmail ? ` - ${organization.contactEmail}` : ""}
         </Text>
+        {organization.disabilityReferent ? (
+          <Text style={{ marginTop: 4 }}>
+            Besoin d&apos;un aménagement (situation de handicap) : contactez le référent handicap,{" "}
+            {organization.disabilityReferent}.
+          </Text>
+        ) : null}
         <Text style={{ marginTop: 16 }}>Merci de vous présenter quelques minutes avant le début de la formation.</Text>
         <OrgFooter organization={organization} />
       </Page>
