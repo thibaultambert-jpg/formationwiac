@@ -10,12 +10,16 @@ export type BpfEnrollment = {
   hours: number;
   /** Price excluding tax invoiced for the enrollment (externals), counted in the year of its first slot. */
   revenue: number;
+  /** The session is run by an external trainer (subcontracting, D12). */
+  subcontracted?: boolean;
 };
 
 export type BpfLine = { key: string; trainees: number; hours: number; revenue: number };
 
 export type BpfSummary = {
   total: BpfLine;
+  /** Trainee-hours delivered by subcontracted (external) trainers (D12). */
+  subcontracted: BpfLine;
   byFunding: BpfLine[];
   byPublic: BpfLine[];
 };
@@ -46,6 +50,7 @@ export function bpfSummary(rows: readonly BpfEnrollment[], includeInternal: bool
   const kept = rows.filter((row) => row.hours > 0 && (includeInternal || row.participantType === "external"));
   return {
     total: line("total", kept),
+    subcontracted: line("subcontracted", kept.filter((row) => row.subcontracted)),
     byFunding: groupBy(kept, (row) => row.fundingType),
     byPublic: groupBy(kept, (row) => row.participantType),
   };

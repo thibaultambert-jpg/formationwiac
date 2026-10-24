@@ -141,6 +141,10 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   legal_hold: "Conservation légale",
   legal_hold_release: "Levée de conservation légale",
   waive_agreement: "Dérogation",
+  learning_assessment: "Évaluation des acquis",
+  read_sensitive: "Consultation d'une donnée restreinte",
+  update_sensitive: "Modification d'une donnée restreinte",
+  rollback_copy: "Copie avant retour arrière",
 };
 
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {
@@ -157,6 +161,9 @@ export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   file: "Fichier",
   internal_regulation: "Règlement intérieur",
   convention: "Convention",
+  complaint: "Réclamation",
+  improvement_action: "Action d'amélioration",
+  trainer_document: "Justificatif formateur",
 };
 
 export const FUNDING_TYPE_LABELS = {
