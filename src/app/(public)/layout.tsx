@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { Logo } from "@/components/brand/logo";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { privacyNoticeText } from "@/server/domain/legal";
@@ -5,6 +6,8 @@ import { legalOrganization } from "@/server/services/legal";
 
 // Pages reached without login: personal links (attendance, evaluations) and legal pages.
 export default async function PublicLayout({ children }: LayoutProps<"/">) {
+  // Request time only: the settings are read from the database (never at build time).
+  await connection();
   const organization = await legalOrganization();
   return (
     <>
