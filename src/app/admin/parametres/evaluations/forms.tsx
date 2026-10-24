@@ -21,6 +21,8 @@ export function DelaysForm({
     evaluationReminderDays: number;
     attendanceMarginBefore: number;
     attendanceMarginAfter: number;
+    positioningDaysBefore: number;
+    alertEmail: string | null;
   };
 }) {
   return (
@@ -45,6 +47,20 @@ export function DelaysForm({
         type="number"
         min={1}
         defaultValue={settings.evaluationReminderDays}
+      />
+      <TextField
+        name="positioningDaysBefore"
+        label="Positionnement avant la session (jours)"
+        type="number"
+        min={1}
+        defaultValue={settings.positioningDaysBefore}
+      />
+      <TextField
+        name="alertEmail"
+        label="Alertes d'absence à"
+        type="email"
+        hint="Référent pédagogique ; à défaut, l'email de contact."
+        defaultValue={settings.alertEmail}
       />
       <TextField
         name="attendanceMarginBefore"

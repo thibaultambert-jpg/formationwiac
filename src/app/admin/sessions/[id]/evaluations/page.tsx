@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/server/auth/guards";
 import { formatDecimal } from "@/server/domain/numbers";
 import { EVALUATION_TYPE_LABELS, sessionEvaluations } from "@/server/services/evaluation-summary";
-import { sendHotEvaluationAction } from "../documents/actions";
+import { sendHotEvaluationAction, sendPositioningAction, sendStakeholderAction } from "../documents/actions";
 
 export const metadata: Metadata = { title: "Évaluations" };
 
@@ -16,7 +16,11 @@ export default async function SessionEvaluationsPage({ params }: PageProps<"/adm
   const { id } = await params;
   const session = await db.trainingSession.findUnique({ where: { id }, select: { id: true, status: true } });
   if (!session) notFound();
-  const evaluations = await Promise.all([sessionEvaluations(id, "hot"), sessionEvaluations(id, "cold")]);
+  const all = await Promise.all(
+    (["positioning", "hot", "cold", "company", "trainer"] as const).map((type) => sessionEvaluations(id, type)),
+  );
+  // Hot and cold are always shown; the other questionnaires once sent.
+  const evaluations = all.filter((item) => item.type === "hot" || item.type === "cold" || item.sent > 0);
   const present = await db.enrollment.count({ where: { sessionId: id, status: "present" } });
 
   return (
@@ -36,11 +40,28 @@ export default async function SessionEvaluationsPage({ params }: PageProps<"/adm
               label="Envoyer l'évaluation à froid"
               variant="outline"
             />
+            <ActionButton
+              action={sendStakeholderAction}
+              hidden={{ sessionId: id }}
+              label="Envoyer les questionnaires entreprise et formateur"
+              variant="outline"
+            />
           </>
         ) : (
-          <p className="text-muted-foreground text-sm">
-            L&apos;évaluation à chaud est envoyée automatiquement aux participants présents à la clôture de la session.
-          </p>
+          <>
+            {session.status !== "cancelled" ? (
+              <ActionButton
+                action={sendPositioningAction}
+                hidden={{ sessionId: id }}
+                label="Envoyer le questionnaire de positionnement"
+                variant="outline"
+              />
+            ) : null}
+            <p className="text-muted-foreground text-sm">
+              Le positionnement part automatiquement avant la session ; l&apos;évaluation à chaud et les questionnaires
+              entreprise et formateur à la clôture.
+            </p>
+          </>
         )}
         <Button asChild variant="outline">
           <a href={`/admin/sessions/${id}/evaluations/export`}>
@@ -54,10 +75,16 @@ export default async function SessionEvaluationsPage({ params }: PageProps<"/adm
         <section key={evaluation.type} aria-labelledby={`evaluation-${evaluation.type}`} className="space-y-4">
           <div className="space-y-1">
             <h2 id={`evaluation-${evaluation.type}`} className="text-lg font-semibold">
-              Évaluation {EVALUATION_TYPE_LABELS[evaluation.type].toLowerCase()}
+              {evaluation.type === "hot" || evaluation.type === "cold"
+                ? `Évaluation ${EVALUATION_TYPE_LABELS[evaluation.type].toLowerCase()}`
+                : `Questionnaire ${EVALUATION_TYPE_LABELS[evaluation.type].toLowerCase()}`}
             </h2>
             <p className="text-muted-foreground text-sm">
-              {evaluation.submitted} réponse(s) sur {present} participant(s) présent(s) · {evaluation.sent} envoi(s)
+              {evaluation.submitted} réponse(s)
+              {evaluation.type === "hot" || evaluation.type === "cold"
+                ? ` sur ${present} participant(s) présent(s)`
+                : ""}{" "}
+              · {evaluation.sent} envoi(s)
               {evaluation.averageScore !== null
                 ? ` · note globale moyenne ${formatDecimal(evaluation.averageScore)} / 5`
                 : ""}

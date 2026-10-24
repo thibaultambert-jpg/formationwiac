@@ -58,7 +58,8 @@ export async function learningAssessmentAction(_state: ActionState, formData: Fo
   const enrollmentId = text(formData, "enrollmentId");
   const result = z.enum(LEARNING_RESULTS).safeParse(text(formData, "learningResult"));
   if (!enrollmentId) return errorState(formData, "Inscription introuvable.");
-  if (!result.success) return errorState(formData, "Choisissez un résultat.", { learningResult: "Résultat obligatoire." });
+  if (!result.success)
+    return errorState(formData, "Choisissez un résultat.", { learningResult: "Résultat obligatoire." });
   return handle(formData, async () => {
     await recordLearningAssessment(
       enrollmentId,

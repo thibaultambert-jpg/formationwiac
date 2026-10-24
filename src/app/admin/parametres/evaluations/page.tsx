@@ -30,6 +30,8 @@ export default async function EvaluationSettingsPage() {
             evaluationReminderDays: settings?.evaluationReminderDays ?? 5,
             attendanceMarginBefore: settings?.attendanceMarginBefore ?? 30,
             attendanceMarginAfter: settings?.attendanceMarginAfter ?? 60,
+            positioningDaysBefore: settings?.positioningDaysBefore ?? 7,
+            alertEmail: settings?.alertEmail ?? null,
           }}
         />
       </section>
@@ -39,15 +41,16 @@ export default async function EvaluationSettingsPage() {
           Tâches automatiques
         </h2>
         <p className="text-muted-foreground text-sm">
-          Rappels J-X, liens d&apos;émargement le matin de chaque journée, clôture des sessions terminées (présences,
-          attestations, évaluation à chaud), évaluation à froid, relances et durée de conservation. Elles
+          Information préalable, positionnement J-X, rappels J-X, liens d&apos;émargement le matin de chaque journée,
+          alertes d&apos;absence, clôture des sessions terminées (présences, attestations, évaluation à chaud),
+          questionnaires entreprise et formateur, évaluation à froid, relances et durée de conservation. Elles
           s&apos;exécutent chaque jour via Vercel Cron ; une même tâche n&apos;envoie jamais deux fois le même email.
           {lastRun ? ` Dernière exécution ayant produit un résultat : ${formatDateTime(lastRun.createdAt)}.` : ""}
         </p>
         <RunAutomationForm />
       </section>
 
-      {(["hot", "cold"] as const).map((type) => (
+      {(["positioning", "hot", "cold", "company", "trainer"] as const).map((type) => (
         <section key={type} aria-labelledby={`questions-${type}`} className="space-y-3">
           <h2 id={`questions-${type}`} className="text-lg font-semibold">
             Questionnaire {EVALUATION_TYPE_LABELS[type].toLowerCase()}

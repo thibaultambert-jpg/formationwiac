@@ -14,6 +14,8 @@ const delaysSchema = z.object({
   evaluationReminderDays: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(1).max(60),
   attendanceMarginBefore: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(0).max(240),
   attendanceMarginAfter: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(0).max(480),
+  positioningDaysBefore: z.number({ error: "Nombre entier attendu." }).int("Nombre entier attendu.").min(1).max(60),
+  alertEmail: z.email("Adresse email invalide.").nullable(),
 });
 
 export async function saveDelays(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -24,6 +26,8 @@ export async function saveDelays(_state: ActionState, formData: FormData): Promi
     evaluationReminderDays: Number(text(formData, "evaluationReminderDays")),
     attendanceMarginBefore: Number(text(formData, "attendanceMarginBefore")),
     attendanceMarginAfter: Number(text(formData, "attendanceMarginAfter")),
+    positioningDaysBefore: Number(text(formData, "positioningDaysBefore")),
+    alertEmail: text(formData, "alertEmail"),
   });
   if (!parsed.success) return errorState(formData, "Délais invalides.", zodFieldErrors(parsed.error.issues));
   const before = await db.organizationSettings.findUnique({ where: { id: 1 } });
@@ -44,6 +48,8 @@ export async function saveDelays(_state: ActionState, formData: FormData): Promi
           evaluationReminderDays: before.evaluationReminderDays,
           attendanceMarginBefore: before.attendanceMarginBefore,
           attendanceMarginAfter: before.attendanceMarginAfter,
+          positioningDaysBefore: before.positioningDaysBefore,
+          alertEmail: before.alertEmail,
         }
       : null,
     after: parsed.data,
@@ -54,7 +60,7 @@ export async function saveDelays(_state: ActionState, formData: FormData): Promi
 
 const questionSchema = z
   .object({
-    evaluationType: z.enum(["hot", "cold"]),
+    evaluationType: z.enum(["hot", "cold", "positioning", "company", "trainer"]),
     label: z.string({ error: "Libellé obligatoire." }).min(1, "Libellé obligatoire."),
     answerType: z.enum(["scale_1_5", "scale_0_10", "single_choice", "choice_with_other", "text"]),
     options: z.array(z.string()),

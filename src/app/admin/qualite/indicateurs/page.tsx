@@ -40,7 +40,13 @@ export default async function IndicatorsPage({ searchParams }: PageProps<"/admin
         <Button asChild variant="outline" className="ml-auto">
           <a href={`/admin/qualite/indicateurs/export?annee=${year}`}>
             <Download aria-hidden="true" />
-            Exporter (CSV)
+            Indicateurs (CSV)
+          </a>
+        </Button>
+        <Button asChild variant="outline">
+          <a href={`/admin/qualite/indicateurs/questionnaires?annee=${year}`}>
+            <Download aria-hidden="true" />
+            Toutes les réponses aux questionnaires (CSV)
           </a>
         </Button>
       </form>
