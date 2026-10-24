@@ -21,7 +21,12 @@ describe("BPF (B7)", () => {
   });
 
   it("isolates the hours delivered by subcontracted trainers (D12)", () => {
-    expect(bpfSummary(rows, false).subcontracted).toEqual({ key: "subcontracted", trainees: 1, hours: 7, revenue: 900 });
+    expect(bpfSummary(rows, false).subcontracted).toEqual({
+      key: "subcontracted",
+      trainees: 1,
+      hours: 7,
+      revenue: 900,
+    });
   });
 
   it("includes internals when asked", () => {

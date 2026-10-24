@@ -35,8 +35,7 @@ export default async function StakeholderQuestionnairePage({ params }: PageProps
           {evaluation.type === "company" ? "Votre avis sur la formation de vos collaborateurs" : "Bilan de la session"}
         </h1>
         <p className="text-muted-foreground">
-          {evaluation.session.training.title} ·{" "}
-          {formatDateRange(evaluation.session.slots.map((slot) => slot.startsAt))}
+          {evaluation.session.training.title} · {formatDateRange(evaluation.session.slots.map((slot) => slot.startsAt))}
           {evaluation.company ? ` · ${evaluation.company.name}` : ""}
         </p>
       </div>

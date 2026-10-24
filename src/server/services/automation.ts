@@ -208,7 +208,9 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
       select: { id: true },
     });
     for (const session of recent) {
-      report.stakeholderEvaluations += (await sendStakeholderEvaluations(session.id, { automatic: true, actorId })).sent;
+      report.stakeholderEvaluations += (
+        await sendStakeholderEvaluations(session.id, { automatic: true, actorId })
+      ).sent;
     }
   });
 
@@ -247,7 +249,8 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
   await step(report, "Relances d'évaluation", async () => {
     const mail = await template("evaluation_reminder");
     const pending = await db.evaluation.findMany({
-      where: { submittedAt: null, reminderSentAt: null, sentAt: { not: null } },
+      // Hot and cold evaluations only: the positioning has its own deadline (the session start).
+      where: { type: { in: ["hot", "cold"] }, submittedAt: null, reminderSentAt: null, sentAt: { not: null } },
       include: { enrollment: { include: { participant: true, session: { include: sessionInclude } } } },
     });
     for (const evaluation of pending) {

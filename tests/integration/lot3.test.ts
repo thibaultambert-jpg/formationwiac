@@ -84,7 +84,11 @@ describe("prior information (B3)", () => {
     });
     await db.enrollment.update({ where: { id: enrollments[0].id }, data: { fundingType: "company" } });
     const before = await sessionCompliance(session.id);
-    expect(before.blockingMissing).toBe(1); // the external only; the internal is out of scope
+    const missing = (keys: typeof before) =>
+      keys.rows.flatMap((row) =>
+        row.requirements.filter((item) => item.blocking && !item.satisfied).map((item) => item.key),
+      );
+    expect(missing(before)).toEqual(["pre_information", "needs_analysis"]); // the external only
 
     // Automatic: only where required (the external), once.
     expect((await sendPreTrainingInformation(session.id, { automatic: true })).sent).toBe(1);
@@ -101,7 +105,7 @@ describe("prior information (B3)", () => {
         }),
       ]),
     );
-    expect((await sessionCompliance(session.id)).blockingMissing).toBe(0);
+    expect(missing(await sessionCompliance(session.id))).toEqual(["needs_analysis"]);
 
     // Manual: everyone who has not received it yet.
     expect((await sendPreTrainingInformation(session.id, { actorId: actor.id })).sent).toBe(1);

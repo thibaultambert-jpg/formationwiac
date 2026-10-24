@@ -84,7 +84,10 @@ const QUESTIONS: Record<EvaluationType, QuestionSeed[]> = {
     { label: "Qu'attendez-vous de cette formation ?", answerType: "text" },
   ],
   company: [
-    { label: "Globalement, êtes-vous satisfait de la formation suivie par vos collaborateurs ?", answerType: "scale_1_5" },
+    {
+      label: "Globalement, êtes-vous satisfait de la formation suivie par vos collaborateurs ?",
+      answerType: "scale_1_5",
+    },
     {
       label: "La formation a-t-elle répondu au besoin exprimé ?",
       answerType: "single_choice",

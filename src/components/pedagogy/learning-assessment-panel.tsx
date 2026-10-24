@@ -37,9 +37,9 @@ export async function LearningAssessmentPanel({
         Indiquez pour chaque stagiaire si les objectifs sont acquis. Le résultat et le commentaire figurent sur son
         attestation de fin de formation.
       </p>
-      <ul className="divide-y rounded-xl border">
+      <div className="divide-y rounded-xl border">
         {enrollments.map((enrollment) => (
-          <li key={enrollment.id} className="p-3">
+          <div key={enrollment.id} className="p-3">
             <LearningAssessmentForm
               action={assessAsTrainer}
               hidden={{ ...auth, enrollmentId: enrollment.id }}
@@ -48,9 +48,9 @@ export async function LearningAssessmentPanel({
               result={enrollment.learningResult}
               comment={enrollment.learningComment}
             />
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }

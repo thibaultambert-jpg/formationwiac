@@ -80,7 +80,10 @@ async function loadEvaluations(
 }
 
 async function summarizeEvaluations(type: EvaluationType, evaluations: Submitted[]): Promise<SessionEvaluations> {
-  const configured = await db.evaluationQuestion.findMany({ where: { evaluationType: type }, orderBy: { position: "asc" } });
+  const configured = await db.evaluationQuestion.findMany({
+    where: { evaluationType: type },
+    orderBy: { position: "asc" },
+  });
   const submitted = evaluations.filter((evaluation) => evaluation.submittedAt && Array.isArray(evaluation.answers));
   const answers = submitted.map((evaluation) => evaluation.answers as unknown as StoredAnswer[]);
 

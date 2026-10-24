@@ -157,7 +157,11 @@ describe("scheduled tasks", () => {
     await runScheduledTasks(paris("2031-03-15T07:00:00+01:00"));
     await runScheduledTasks(paris("2031-03-16T07:00:00+01:00"));
     expect(await sends(session.id, "evaluation_request")).toBe(2);
-    expect(await db.evaluation.count({ where: { enrollmentId: enrollments[0].id } })).toBe(2);
+    expect(
+      await db.evaluation.count({ where: { enrollmentId: enrollments[0].id, type: { in: ["hot", "cold"] } } }),
+    ).toBe(2);
+    // Positioning (D3) was sent before the session and never reminded as an evaluation.
+    expect(await sends(session.id, "positioning_request")).toBe(2);
   }, 60_000);
 
   it("holds the certificates of externals until the SIRET and the NDA are set (B1)", async () => {

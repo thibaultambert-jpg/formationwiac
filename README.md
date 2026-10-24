@@ -232,6 +232,20 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
   C'est une obligation de l'onglet **Conformité**.
 - **Certificat de réalisation** : généré avec l'attestation pour les externes et les financements publics, d'après les
   seules heures signées ; joint à l'email de l'attestation et archivé avec son empreinte.
+- **Suivi pédagogique** : bouton **Suivi** de chaque inscrit : analyse du besoin (note ou document), test de
+  positionnement téléversé, évaluation des acquis (acquis, partiellement acquis, non acquis, commentaire repris sur
+  l'attestation), besoin d'aménagement. Ce dernier est réservé aux admins : il n'apparaît dans aucun export ni PDF, et
+  chaque consultation est journalisée. Le formateur saisit aussi les acquis depuis son lien ou « Mes sessions ».
+  Pour les externes du périmètre Qualiopi, l'attestation attend l'évaluation des acquis.
+- **Abandon** : statut « Abandon » avec motif, une fois la formation commencée. Un créneau terminé sans signature
+  déclenche une alerte à l'adresse « Alertes d'absence » (Paramètres › Évaluations et rappels).
+- **Questionnaires** : positionnement J-7 (délai réglable), à chaud, à froid, entreprise cliente (contact principal)
+  et formateur à la clôture ; tous éditables dans **Paramètres › Évaluations et rappels**.
+- **Qualité** : menu **Qualité** : indicateurs par formation et par année (satisfaction, assiduité, abandon, absence,
+  taux de réponse, acquis), export de toutes les réponses aux questionnaires, registre des réclamations et des actions
+  d'amélioration, avec exports CSV.
+- **Formateurs** : justificatifs datés (diplômes, certifications, contrat de sous-traitance…) sur la fiche ; alerte
+  si un formateur externe n'a pas de contrat de sous-traitance en vigueur. Le BPF isole les heures sous-traitées.
 - **Bilan (BPF)** : menu **Bilan (BPF)**, par année civile, stagiaires, heures signées et produits HT par financement
   et par public, avec ou sans les collaborateurs internes ; exports CSV synthèse et détail.
 

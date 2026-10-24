@@ -79,5 +79,7 @@ export function positioningDue(firstSlotStart: Date, daysBefore: number, now: Da
 
 /** Absence alert of a slot (D6): from 15 minutes after its end, the same Paris day. */
 export function absenceAlertDue(slot: TimeRange, now: Date): boolean {
-  return now.getTime() >= slot.endsAt.getTime() + 15 * 60_000 && toParisDateInput(now) === toParisDateInput(slot.endsAt);
+  return (
+    now.getTime() >= slot.endsAt.getTime() + 15 * 60_000 && toParisDateInput(now) === toParisDateInput(slot.endsAt)
+  );
 }

@@ -167,7 +167,8 @@ export async function submitStakeholderEvaluation(_state: ActionState, formData:
     : null;
   if (!evaluation || (evaluation.type !== "company" && evaluation.type !== "trainer"))
     return errorState(formData, "Ce lien n'est plus valide.");
-  if (evaluation.submittedAt) return { status: "success", message: "Vous avez déjà répondu à ce questionnaire. Merci !" };
+  if (evaluation.submittedAt)
+    return { status: "success", message: "Vous avez déjà répondu à ce questionnaire. Merci !" };
   const result = await checkAnswers(evaluation.type, formData);
   if (!result.ok) return errorState(formData, "Merci de répondre aux questions obligatoires.", result.errors);
   await db.stakeholderEvaluation.update({
@@ -186,7 +187,11 @@ export async function submitStakeholderEvaluation(_state: ActionState, formData:
 }
 
 export async function submitEvaluation(_state: ActionState, formData: FormData): Promise<ActionState> {
-  const record = await resolveToken(text(formData, "token") ?? "", ["hot_evaluation", "cold_evaluation", "positioning"]);
+  const record = await resolveToken(text(formData, "token") ?? "", [
+    "hot_evaluation",
+    "cold_evaluation",
+    "positioning",
+  ]);
   if (!record?.enrollmentId) return errorState(formData, "Ce lien d'évaluation n'est plus valide.");
   const type = TOKEN_EVALUATION_TYPES[record.purpose as keyof typeof TOKEN_EVALUATION_TYPES];
   const evaluation = await db.evaluation.upsert({

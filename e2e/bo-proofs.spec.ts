@@ -77,7 +77,12 @@ test("attendance by link and on the trainer's device, closure, evaluation and pr
     .click();
   await guest.getByRole("textbox", { name: "Ou saisissez votre nom pour signer" }).fill("Bruno Tablette");
   await guest.getByRole("button", { name: "Valider la signature" }).click();
-  await expect(guest.getByRole("listitem").filter({ hasText: `Bruno Tablette${stamp}` })).toContainText("Signé à");
+  await expect(
+    guest
+      .getByRole("listitem")
+      .filter({ hasText: `Bruno Tablette${stamp}` })
+      .first(),
+  ).toContainText("Signé à");
   await guest.getByRole("button", { name: "Signer en tant que formateur" }).click();
   await guest.getByRole("textbox", { name: "Ou saisissez votre nom pour signer" }).fill("Theo Formateur");
   await guest.getByRole("button", { name: "Valider la signature" }).click();
