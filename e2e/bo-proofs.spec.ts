@@ -137,6 +137,9 @@ test("attendance by link and on the trainer's device, closure, evaluation and pr
   expect(names.filter((name) => name.startsWith("attestations/"))).toHaveLength(3);
   expect(names).toContain("evaluations/reponses.csv");
   expect(names).toContain("evaluations/synthese.csv");
+  // Full dossier (I1): program and index of every document and send.
+  expect(names).toContain("index.csv");
+  expect(new TextDecoder().decode(files["index.csv"])).toContain("Identifiant Gmail");
   expect(new TextDecoder().decode(files["evaluations/reponses.csv"])).toContain(`Les exercices ${stamp}`);
   const sheet = files[names.find((name) => name.startsWith("emargement/"))!];
   expect(new TextDecoder().decode(sheet.slice(0, 5))).toBe("%PDF-");

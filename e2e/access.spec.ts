@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // Signed-in scenarios need a real Google account and are covered by the
@@ -58,4 +59,18 @@ test("responses carry the security headers (E7)", async ({ request }) => {
   expect(headers["strict-transport-security"]).toContain("max-age=");
   expect(headers["permissions-policy"]).toContain("camera=()");
   expect(headers["x-powered-by"]).toBeUndefined();
+});
+
+test("the public pages pass the WCAG A/AA rules of axe-core (H2)", async ({ page }) => {
+  for (const path of [
+    "/connexion",
+    "/confidentialite",
+    "/reglement-interieur",
+    "/emargement/lien-invalide-000000000000000000000000000000000000",
+  ]) {
+    await page.goto(path);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(results.passes.length).toBeGreaterThan(5);
+    expect(results.violations.map((violation) => `${path} ${violation.id}`)).toEqual([]);
+  }
 });

@@ -11,6 +11,8 @@ import {
   sendStakeholderEvaluations,
 } from "@/server/services/quality-sends";
 import { sendCertificates } from "@/server/services/session-documents";
+import { buildSessionDossier } from "@/server/services/session-dossier";
+import { unzipSync } from "fflate";
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 let actorId = "";
@@ -265,5 +267,24 @@ describe("quality registers and indicators (D1, D10, D11)", () => {
     });
     const row = (await indicatorsByTraining(2034)).find((item) => item.trainingId === session.trainingId);
     expect(row).toMatchObject({ trainees: 1, sessions: 1, attendanceRate: 50, dropoutRate: 0 });
+  });
+});
+
+describe("full session dossier (I1)", () => {
+  it("bundles the sheet, the documents as sent, the evaluations and an index of the sends", async () => {
+    const { session, enrollment } = await fixture({ startsAt: new Date("2025-05-05T07:00:00Z"), status: "completed" });
+    await sendCertificates(session.id, { automatic: false, actorId });
+    const dossier = await buildSessionDossier(session.id);
+    const files = unzipSync(dossier!.zip);
+    const names = Object.keys(files);
+    expect(names.filter((name) => name.startsWith("emargement/"))).toHaveLength(1);
+    expect(names.some((name) => name.startsWith("attestations/"))).toBe(true);
+    expect(names.some((name) => name.startsWith("certificats-realisation/"))).toBe(true);
+    expect(names).toContain("evaluations/reponses.csv");
+    expect(names.some((name) => name.startsWith("envois/") && name.endsWith(".eml"))).toBe(true);
+    const index = new TextDecoder().decode(files["index.csv"]);
+    expect(index).toContain("Attestation");
+    expect(index).toContain("certificats-realisation/");
+    expect(enrollment.id).toBeTruthy();
   });
 });
