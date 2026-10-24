@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LiveAttendance } from "@/components/attendance/live-attendance";
+import { LearningAssessmentPanel } from "@/components/pedagogy/learning-assessment-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { db } from "@/lib/db";
 import { resolveTrainerAccess } from "@/server/services/trainer-access";
@@ -29,6 +30,7 @@ export default async function TrainerAttendancePage({ params }: PageProps<"/emar
         </p>
       </div>
       <LiveAttendance sessionId={access.sessionId} trainerId={access.trainerId} auth={{ token }} />
+      <LearningAssessmentPanel sessionId={access.sessionId} auth={{ token }} />
     </div>
   );
 }

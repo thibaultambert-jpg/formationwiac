@@ -6,7 +6,13 @@ import { getEnv } from "@/lib/env";
 import { audit } from "@/server/audit";
 import { attended, linkWindow, sha256, slotAttendance } from "@/server/domain/attendance-proof";
 import { presenceAtClosure } from "@/server/domain/automation";
-import { isPublicFunding, missingOrganizationIdentifiers, type FundingTypeValue } from "@/server/domain/compliance";
+import {
+  inQualiopiScope,
+  isPublicFunding,
+  missingOrganizationIdentifiers,
+  qualiopiExternal,
+  type FundingTypeValue,
+} from "@/server/domain/compliance";
 import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
 import type { MailAttachment } from "@/server/email/mime";
 import { sessionVariables } from "@/server/email/notifications";
@@ -26,7 +32,13 @@ import { issueToken } from "@/server/tokens";
 const DAY = 24 * 3_600_000;
 const EVALUATION_LINK_DAYS = 30;
 
-export type SendReport = { sent: number; skipped: number; failed: number };
+export type SendReport = {
+  sent: number;
+  skipped: number;
+  failed: number;
+  /** Certificates held until the learning assessment is recorded (D5). */
+  held?: number;
+};
 
 /** Business rule violation of a manual send, shown to the user as is. */
 export class DocumentError extends Error {}
@@ -322,11 +334,18 @@ export async function sendCertificates(
   const recipients = activeEnrollments(documents, ["present"]);
   if (blocked && !options.automatic && recipients.some((enrollment) => enrollment.participantType === "external"))
     throw new DocumentError(blocked);
+  const inScope = inQualiopiScope(documents.session, documents.session.enrollments);
   for (const enrollment of recipients) {
     // Automatic send: external certificates wait until the identifiers are set
     // (no dedup key is claimed, so the next run sends them).
     if (blocked && enrollment.participantType === "external") {
       report.failed++;
+      continue;
+    }
+    // Externals of the Qualiopi scope: the certificate carries the learning
+    // assessment, so it waits until it is recorded (D5); retried by the job.
+    if (qualiopiExternal(enrollment.participantType, inScope) && !enrollment.learningResult) {
+      report.held = (report.held ?? 0) + 1;
       continue;
     }
     const dedupKey = options.automatic ? `certificate:${enrollment.id}` : undefined;

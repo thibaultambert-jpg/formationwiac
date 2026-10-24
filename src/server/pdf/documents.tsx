@@ -1,7 +1,7 @@
 import "server-only";
 import { Document, Image, Page, renderToBuffer, Text, View } from "@react-pdf/renderer";
 import { formatDate, formatTime, formatWeekday } from "@/lib/dates";
-import { MODALITY_LABELS } from "@/lib/labels";
+import { LEARNING_RESULT_LABELS, MODALITY_LABELS } from "@/lib/labels";
 import { attended as attendedSlot, signedHours } from "@/server/domain/attendance-proof";
 import { ACTION_NATURE } from "@/server/domain/compliance";
 import { formatDecimal } from "@/server/domain/numbers";
@@ -229,6 +229,15 @@ export async function renderCertificate(documents: SessionDocuments, enrollment:
         </Text>
         <Text style={styles.h2}>Objectifs de la formation</Text>
         <Text>{session.training.objectives}</Text>
+        {enrollment.learningResult ? (
+          <>
+            <Text style={styles.h2}>Résultats de l&apos;évaluation des acquis</Text>
+            <Text>
+              <Text style={styles.bold}>{LEARNING_RESULT_LABELS[enrollment.learningResult]}</Text>
+              {enrollment.learningComment ? ` : ${enrollment.learningComment}` : ""}
+            </Text>
+          </>
+        ) : null}
         <View style={{ marginTop: 32, alignSelf: "flex-end", alignItems: "center", width: 220 }}>
           <Text>
             Fait {organization.city ? `à ${organization.city}, ` : ""}le {formatDate(last?.endsAt ?? new Date())}

@@ -13,6 +13,7 @@ import {
   signParticipant,
   signTrainer,
 } from "@/server/services/attendance";
+import { PedagogyError, recordLearningAssessment } from "@/server/services/pedagogy";
 import { resolveTrainerAccess } from "@/server/services/trainer-access";
 import { resolveAttendanceLink, resolveToken } from "@/server/tokens";
 
@@ -114,6 +115,30 @@ export async function correctAsTrainer(_state: ActionState, formData: FormData):
   }
   refresh();
   return { status: "success", message: "Déclaration enregistrée." };
+}
+
+/** Trainer records the learning assessment of a trainee of the session (D5). */
+export async function assessAsTrainer(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const access = await resolveTrainerAccess({ token: text(formData, "token"), sessionId: text(formData, "sessionId") });
+  if (!access) return errorState(formData, "Accès refusé.");
+  const result = text(formData, "learningResult");
+  if (result !== "acquired" && result !== "partially_acquired" && result !== "not_acquired")
+    return errorState(formData, "Choisissez un résultat.", { learningResult: "Résultat obligatoire." });
+  const enrollment = await db.enrollment.findUnique({ where: { id: text(formData, "enrollmentId") ?? "" } });
+  if (!enrollment || enrollment.sessionId !== access.sessionId) return errorState(formData, "Participant introuvable.");
+  const trainer = await db.trainer.findUniqueOrThrow({ where: { id: access.trainerId } });
+  try {
+    await recordLearningAssessment(
+      enrollment.id,
+      { result, comment: text(formData, "learningComment"), file: null },
+      { userId: access.actorId, label: `${trainer.firstName} ${trainer.lastName} (formateur)` },
+    );
+  } catch (error) {
+    if (error instanceof PedagogyError) return errorState(formData, error.message);
+    throw error;
+  }
+  refresh();
+  return { status: "success", message: "Évaluation des acquis enregistrée." };
 }
 
 export async function submitEvaluation(_state: ActionState, formData: FormData): Promise<ActionState> {

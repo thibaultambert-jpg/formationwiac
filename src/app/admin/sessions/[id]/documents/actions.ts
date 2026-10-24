@@ -23,6 +23,7 @@ function summary(label: string, report: SendReport): ActionState {
     `${report.sent} envoyé(s)`,
     report.skipped ? `${report.skipped} ignoré(s)` : null,
     report.failed ? `${report.failed} en échec` : null,
+    report.held ? `${report.held} en attente de l'évaluation des acquis` : null,
   ].filter(Boolean);
   return { status: report.failed > 0 ? "error" : "success", message: `${label} : ${parts.join(", ")}.` };
 }

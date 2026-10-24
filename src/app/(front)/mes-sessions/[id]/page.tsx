@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LiveAttendance } from "@/components/attendance/live-attendance";
+import { LearningAssessmentPanel } from "@/components/pedagogy/learning-assessment-panel";
 import { db } from "@/lib/db";
 import { requireRole } from "@/server/auth/guards";
 import { resolveTrainerAccess } from "@/server/services/trainer-access";
@@ -31,6 +32,7 @@ export default async function MySessionPage({ params }: PageProps<"/mes-sessions
         trainerId={access.trainerId}
         auth={{ sessionId: access.sessionId }}
       />
+      <LearningAssessmentPanel sessionId={access.sessionId} auth={{ sessionId: access.sessionId }} />
     </div>
   );
 }
