@@ -51,6 +51,8 @@ enum EnrollmentStatus {
   cancelled
   present
   absent
+  // Left the training before its end (D6), with a date and a reason.
+  dropped_out
 }
 
 // How the training is paid for (BPF breakdown, Qualiopi scope).
@@ -79,6 +81,47 @@ enum EnrollmentSource {
 enum EvaluationType {
   hot
   cold
+  // Entry assessment before the session (D3).
+  positioning
+  // Questionnaires of the client company and of the trainer (D9).
+  company
+  trainer
+}
+
+// Learning assessment of a trainee (D5).
+enum LearningResult {
+  acquired
+  partially_acquired
+  not_acquired
+}
+
+enum TrainerDocumentType {
+  diploma
+  certification
+  cv
+  subcontracting_contract
+  insurance
+  other
+}
+
+enum ComplaintStatus {
+  open
+  in_progress
+  closed
+}
+
+enum ImprovementSource {
+  complaint
+  evaluation
+  audit
+  other
+}
+
+enum ImprovementStatus {
+  planned
+  in_progress
+  done
+  abandoned
 }
 
 enum SignatureMethod {
@@ -101,6 +144,8 @@ enum TokenPurpose {
   trainer_attendance
   hot_evaluation
   cold_evaluation
+  positioning
+  stakeholder_evaluation
 }
 
 enum QuestionAnswerType {
@@ -131,6 +176,9 @@ enum DocumentType {
   evaluation_request
   evaluation_reminder
   session_cancellation
+  positioning_request
+  stakeholder_evaluation_request
+  absence_alert
 }
 
 // ───────────── Users ─────────────
@@ -218,10 +266,12 @@ model Trainer {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
-  user           User?              @relation(fields: [userId], references: [id])
+  user           User?                   @relation(fields: [userId], references: [id])
   sessions       SessionTrainer[]
   slotSignatures TrainerSignature[]
   accessTokens   AccessToken[]
+  documents      TrainerDocument[]
+  evaluations    StakeholderEvaluation[]
 
   @@map("trainers")
 }
@@ -254,13 +304,15 @@ model TrainingSession {
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
-  training     Training         @relation(fields: [trainingId], references: [id])
-  slots        SessionSlot[]
-  trainers     SessionTrainer[]
-  enrollments  Enrollment[]
-  documents    Document[]
-  accessTokens AccessToken[]
-  conventions  Convention[]
+  training               Training                @relation(fields: [trainingId], references: [id])
+  slots                  SessionSlot[]
+  trainers               SessionTrainer[]
+  enrollments            Enrollment[]
+  documents              Document[]
+  accessTokens           AccessToken[]
+  conventions            Convention[]
+  stakeholderEvaluations StakeholderEvaluation[]
+  complaints             Complaint[]
 
   @@index([trainingId])
   @@index([status])
@@ -314,12 +366,13 @@ model Company {
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  mainContact       Participant?  @relation("CompanyMainContact", fields: [mainContactId], references: [id])
-  participants      Participant[] @relation("CompanyParticipants")
+  mainContact       Participant?            @relation("CompanyMainContact", fields: [mainContactId], references: [id])
+  participants      Participant[]           @relation("CompanyParticipants")
   billedEnrollments Enrollment[]
-  mergedInto        Company?      @relation("CompanyMerge", fields: [mergedIntoId], references: [id])
-  mergedCompanies   Company[]     @relation("CompanyMerge")
+  mergedInto        Company?                @relation("CompanyMerge", fields: [mergedIntoId], references: [id])
+  mergedCompanies   Company[]               @relation("CompanyMerge")
   conventions       Convention[]
+  evaluations       StakeholderEvaluation[]
 
   @@index([name])
   @@map("companies")
@@ -378,6 +431,23 @@ model Enrollment {
   agreementWaiverReason String?          @map("agreement_waiver_reason")
   agreementWaivedAt     DateTime?        @map("agreement_waived_at") @db.Timestamptz
   agreementWaivedById   String?          @map("agreement_waived_by_id") @db.Uuid
+  // Needs analysis of the client (D2): a note and/or a document.
+  needsAnalysisNote     String?          @map("needs_analysis_note") @db.Text
+  needsAnalysisPath     String?          @map("needs_analysis_path")
+  // Entry assessment passed outside the app (D3), as an uploaded file.
+  positioningPath       String?          @map("positioning_path")
+  // Learning assessment (D5), printed on the certificate.
+  learningResult        LearningResult?  @map("learning_result")
+  learningComment       String?          @map("learning_comment") @db.Text
+  learningFilePath      String?          @map("learning_file_path")
+  learningAssessedAt    DateTime?        @map("learning_assessed_at") @db.Timestamptz
+  learningAssessedBy    String?          @map("learning_assessed_by")
+  // Dropout (D6).
+  droppedOutAt          DateTime?        @map("dropped_out_at") @db.Timestamptz
+  dropoutReason         String?          @map("dropout_reason")
+  // Adaptation need (D8): restricted to admins, every read is logged, never
+  // exported nor printed. Free text about the adaptation only, no health data.
+  adaptationNeed        String?          @map("adaptation_need") @db.Text
   updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   session        TrainingSession        @relation(fields: [sessionId], references: [id])
@@ -502,26 +572,29 @@ model TrainerSignature {
 // Only a hash of the token is stored. Participant links reference an
 // enrollment; trainer attendance links reference a session and a trainer.
 model AccessToken {
-  id           String       @id @default(uuid(7)) @db.Uuid
-  purpose      TokenPurpose
-  tokenHash    String       @unique @map("token_hash")
-  enrollmentId String?      @map("enrollment_id") @db.Uuid
-  sessionId    String?      @map("session_id") @db.Uuid
-  trainerId    String?      @map("trainer_id") @db.Uuid
+  id                      String       @id @default(uuid(7)) @db.Uuid
+  purpose                 TokenPurpose
+  tokenHash               String       @unique @map("token_hash")
+  enrollmentId            String?      @map("enrollment_id") @db.Uuid
+  sessionId               String?      @map("session_id") @db.Uuid
+  trainerId               String?      @map("trainer_id") @db.Uuid
+  // Company and trainer questionnaires (D9).
+  stakeholderEvaluationId String?      @map("stakeholder_evaluation_id") @db.Uuid
   // Participant attendance links are issued per slot and used once (C2).
-  slotId       String?      @map("slot_id") @db.Uuid
+  slotId                  String?      @map("slot_id") @db.Uuid
   // Valid from (attendance links open shortly before their slot).
-  validFrom    DateTime?    @map("valid_from") @db.Timestamptz
-  expiresAt    DateTime     @map("expires_at") @db.Timestamptz
-  consumedAt   DateTime?    @map("consumed_at") @db.Timestamptz
-  lastUsedAt   DateTime?    @map("last_used_at") @db.Timestamptz
-  revokedAt    DateTime?    @map("revoked_at") @db.Timestamptz
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  validFrom               DateTime?    @map("valid_from") @db.Timestamptz
+  expiresAt               DateTime     @map("expires_at") @db.Timestamptz
+  consumedAt              DateTime?    @map("consumed_at") @db.Timestamptz
+  lastUsedAt              DateTime?    @map("last_used_at") @db.Timestamptz
+  revokedAt               DateTime?    @map("revoked_at") @db.Timestamptz
+  createdAt               DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id])
-  session    TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  trainer    Trainer?         @relation(fields: [trainerId], references: [id])
-  slot       SessionSlot?     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  enrollment            Enrollment?            @relation(fields: [enrollmentId], references: [id])
+  session               TrainingSession?       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trainer               Trainer?               @relation(fields: [trainerId], references: [id])
+  slot                  SessionSlot?           @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  stakeholderEvaluation StakeholderEvaluation? @relation(fields: [stakeholderEvaluationId], references: [id], onDelete: Cascade)
 
   @@index([enrollmentId, purpose])
   @@index([sessionId, trainerId])
@@ -627,6 +700,10 @@ model OrganizationSettings {
   reminderDaysBefore        Int      @default(3) @map("reminder_days_before")
   coldEvaluationDays        Int      @default(60) @map("cold_evaluation_days")
   evaluationReminderDays    Int      @default(5) @map("evaluation_reminder_days")
+  // Entry assessment sent N days before the session (D3).
+  positioningDaysBefore     Int      @default(7) @map("positioning_days_before")
+  // Absence alerts of the day go to this address (D6), the contact email otherwise.
+  alertEmail                String?  @map("alert_email")
   // Retention (E5): externals after the end of their last session; internals
   // after leaving; technical attendance data; expired links.
   dataRetentionYears        Int      @default(5) @map("data_retention_years")
@@ -665,6 +742,96 @@ model InternalRegulation {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("internal_regulations")
+}
+
+// Company and trainer questionnaires of a session (D9): one per company of the
+// trainees and one per trainer. `subjectId` is the company or trainer id.
+model StakeholderEvaluation {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  sessionId      String         @map("session_id") @db.Uuid
+  type           EvaluationType
+  subjectId      String         @map("subject_id") @db.Uuid
+  companyId      String?        @map("company_id") @db.Uuid
+  trainerId      String?        @map("trainer_id") @db.Uuid
+  recipientEmail String?        @map("recipient_email")
+  answers        Json?
+  globalScore    Decimal?       @map("global_score") @db.Decimal(4, 2)
+  sentAt         DateTime?      @map("sent_at") @db.Timestamptz
+  reminderSentAt DateTime?      @map("reminder_sent_at") @db.Timestamptz
+  submittedAt    DateTime?      @map("submitted_at") @db.Timestamptz
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  session      TrainingSession @relation(fields: [sessionId], references: [id])
+  company      Company?        @relation(fields: [companyId], references: [id])
+  trainer      Trainer?        @relation(fields: [trainerId], references: [id])
+  accessTokens AccessToken[]
+
+  @@unique([sessionId, type, subjectId])
+  @@map("stakeholder_evaluations")
+}
+
+// Supporting documents of a trainer (D7, D12): diplomas, certifications,
+// subcontracting contract… with their dates. Archived, never deleted.
+model TrainerDocument {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  trainerId   String              @map("trainer_id") @db.Uuid
+  type        TrainerDocumentType
+  label       String
+  filePath    String              @map("file_path")
+  issuedAt    DateTime?           @map("issued_at") @db.Timestamptz
+  expiresAt   DateTime?           @map("expires_at") @db.Timestamptz
+  archivedAt  DateTime?           @map("archived_at") @db.Timestamptz
+  createdById String?             @map("created_by_id") @db.Uuid
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  trainer Trainer @relation(fields: [trainerId], references: [id])
+
+  @@index([trainerId])
+  @@map("trainer_documents")
+}
+
+// Complaints register (D10, Qualiopi indicator 31).
+model Complaint {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  receivedAt  DateTime        @map("received_at") @db.Timestamptz
+  complainant String
+  channel     String?
+  sessionId   String?         @map("session_id") @db.Uuid
+  subject     String
+  description String          @db.Text
+  treatment   String?         @db.Text
+  response    String?         @db.Text
+  status      ComplaintStatus @default(open)
+  closedAt    DateTime?       @map("closed_at") @db.Timestamptz
+  createdById String?         @map("created_by_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  session      TrainingSession?    @relation(fields: [sessionId], references: [id])
+  improvements ImprovementAction[]
+
+  @@map("complaints")
+}
+
+// Continuous improvement register (D11, Qualiopi indicator 32).
+model ImprovementAction {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  source      ImprovementSource
+  complaintId String?           @map("complaint_id") @db.Uuid
+  origin      String?
+  action      String            @db.Text
+  owner       String?
+  dueDate     DateTime?         @map("due_date") @db.Timestamptz
+  status      ImprovementStatus @default(planned)
+  result      String?           @db.Text
+  closedAt    DateTime?         @map("closed_at") @db.Timestamptz
+  createdById String?           @map("created_by_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  complaint Complaint? @relation(fields: [complaintId], references: [id])
+
+  @@map("improvement_actions")
 }
 
 // One editable template per email type ({{prenom}}, {{formation}}, …).

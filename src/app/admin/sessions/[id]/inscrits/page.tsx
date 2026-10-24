@@ -15,6 +15,7 @@ import {
   ENROLLMENT_STATUS_LABELS,
   ENROLLMENT_STATUS_TONES,
   FUNDING_TYPE_LABELS,
+  LEARNING_RESULT_LABELS,
   PARTICIPANT_TYPE_LABELS,
 } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
@@ -30,6 +31,7 @@ import {
   MoveEnrollmentDialog,
   WaiveAgreementDialog,
 } from "./enrollment-dialogs";
+import { PedagogyDialog } from "./pedagogy-dialog";
 
 export const metadata: Metadata = { title: "Inscrits" };
 
@@ -38,6 +40,7 @@ const STATUS_ORDER: Record<string, number> = {
   pending_agreement: 0,
   present: 0,
   absent: 0,
+  dropped_out: 0,
   waitlisted: 1,
   cancelled: 2,
 };
@@ -60,7 +63,11 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
   const [enrollments, sameTraining, otherTrainings] = await Promise.all([
     db.enrollment.findMany({
       where: { sessionId: session.id },
-      include: { participant: { include: { company: true } }, billingCompany: true },
+      include: {
+        participant: { include: { company: true } },
+        billingCompany: true,
+        evaluations: { where: { type: "positioning", submittedAt: { not: null } }, select: { globalScore: true } },
+      },
     }),
     db.trainingSession.findMany({
       where: { ...openTargets, trainingId: session.trainingId },
@@ -182,6 +189,16 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                         Sans convention : {enrollment.agreementWaiverReason}
                       </span>
                     ) : null}
+                    {enrollment.dropoutReason ? (
+                      <span className="block max-w-48 truncate text-xs" title={enrollment.dropoutReason}>
+                        Abandon : {enrollment.dropoutReason}
+                      </span>
+                    ) : null}
+                    {enrollment.learningResult ? (
+                      <span className="text-muted-foreground block text-xs">
+                        Acquis : {LEARNING_RESULT_LABELS[enrollment.learningResult].toLowerCase()}
+                      </span>
+                    ) : null}
                     {enrollment.cancellationReason ? (
                       <span className="block max-w-48 truncate text-xs" title={enrollment.cancellationReason}>
                         {enrollment.cancellationReason}
@@ -208,8 +225,29 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                           ? { id: enrollment.billingCompany.id, label: enrollment.billingCompany.name }
                           : null,
                         cancellationReason: enrollment.cancellationReason,
+                        dropoutReason: enrollment.dropoutReason,
                       }}
                     />
+                    {enrollment.status !== "cancelled" && enrollment.status !== "waitlisted" ? (
+                      <PedagogyDialog
+                        enrollment={{
+                          id: enrollment.id,
+                          name,
+                          motivation: enrollment.motivation,
+                          needsAnalysisNote: enrollment.needsAnalysisNote,
+                          needsAnalysisPath: enrollment.needsAnalysisPath,
+                          positioningScore: enrollment.evaluations[0]
+                            ? (decimalInput(enrollment.evaluations[0].globalScore) ?? "—")
+                            : null,
+                          positioningPath: enrollment.positioningPath,
+                          learningResult: enrollment.learningResult,
+                          learningComment: enrollment.learningComment,
+                          learningFilePath: enrollment.learningFilePath,
+                          learningAssessedBy: enrollment.learningAssessedBy,
+                          hasAdaptationNeed: Boolean(enrollment.adaptationNeed),
+                        }}
+                      />
+                    ) : null}
                     {enrollment.status === "pending_agreement" ? (
                       <WaiveAgreementDialog enrollment={{ id: enrollment.id, name }} />
                     ) : null}

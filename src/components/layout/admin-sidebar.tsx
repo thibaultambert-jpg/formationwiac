@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Building2,
   CalendarDays,
   FileBarChart,
@@ -16,6 +17,7 @@ const ADMIN_NAV = [
   { href: "/admin/formateurs", label: "Formateurs", icon: UserRound },
   { href: "/admin/entreprises", label: "Entreprises", icon: Building2 },
   { href: "/admin/bpf", label: "Bilan (BPF)", icon: FileBarChart },
+  { href: "/admin/qualite", label: "Qualité", icon: BadgeCheck },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ] as const;
 

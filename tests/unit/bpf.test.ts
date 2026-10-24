@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { bpfSummary, type BpfEnrollment } from "@/server/domain/bpf";
 
 const rows: BpfEnrollment[] = [
-  { participantType: "external", fundingType: "opco", hours: 7, revenue: 900 },
+  { participantType: "external", fundingType: "opco", hours: 7, revenue: 900, subcontracted: true },
   { participantType: "external", fundingType: "opco", hours: 3.5, revenue: 900 },
   { participantType: "external", fundingType: "company", hours: 14, revenue: 1500.5 },
   { participantType: "external", fundingType: "cpf", hours: 0, revenue: 800 },
@@ -18,6 +18,15 @@ describe("BPF (B7)", () => {
       { key: "opco", trainees: 2, hours: 10.5, revenue: 1800 },
     ]);
     expect(summary.byPublic).toEqual([{ key: "external", trainees: 3, hours: 24.5, revenue: 3300.5 }]);
+  });
+
+  it("isolates the hours delivered by subcontracted trainers (D12)", () => {
+    expect(bpfSummary(rows, false).subcontracted).toEqual({
+      key: "subcontracted",
+      trainees: 1,
+      hours: 7,
+      revenue: 900,
+    });
   });
 
   it("includes internals when asked", () => {

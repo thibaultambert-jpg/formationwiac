@@ -71,3 +71,15 @@ export function signingWindowOpen(slot: TimeRange, now: Date): boolean {
 export function presenceAtClosure(signedSlots: number): "present" | "absent" {
   return signedSlots > 0 ? "present" : "absent";
 }
+
+/** Entry assessment (D3): sent from the morning N days before the first slot, until the session starts. */
+export function positioningDue(firstSlotStart: Date, daysBefore: number, now: Date): boolean {
+  return reminderDue(firstSlotStart, daysBefore, now);
+}
+
+/** Absence alert of a slot (D6): from 15 minutes after its end, the same Paris day. */
+export function absenceAlertDue(slot: TimeRange, now: Date): boolean {
+  return (
+    now.getTime() >= slot.endsAt.getTime() + 15 * 60_000 && toParisDateInput(now) === toParisDateInput(slot.endsAt)
+  );
+}

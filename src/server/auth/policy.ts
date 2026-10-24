@@ -48,6 +48,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/cron",
   "/emargement",
   "/evaluation",
+  "/questionnaire",
   // Legal pages (F1, F2, F3), readable without signing in.
   "/confidentialite",
   "/mentions-legales",

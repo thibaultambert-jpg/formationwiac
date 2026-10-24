@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Évaluation", robots: { index: false
 
 export default async function EvaluationPage({ params }: PageProps<"/evaluation/[token]">) {
   const { token } = await params;
-  const record = await resolveToken(token, ["hot_evaluation", "cold_evaluation"]);
+  const record = await resolveToken(token, ["hot_evaluation", "cold_evaluation", "positioning"]);
   const enrollment = record?.enrollmentId
     ? await db.enrollment.findUnique({
         where: { id: record.enrollmentId },
@@ -28,14 +28,18 @@ export default async function EvaluationPage({ params }: PageProps<"/evaluation/
       </Alert>
     );
   }
-  const type = record.purpose === "hot_evaluation" ? "hot" : "cold";
+  const type = record.purpose === "hot_evaluation" ? "hot" : record.purpose === "positioning" ? "positioning" : "cold";
   const already = enrollment.evaluations.find((evaluation) => evaluation.type === type)?.submittedAt;
 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">
-          {type === "hot" ? "Votre avis sur la formation" : "Quelques semaines après la formation"}
+          {type === "hot"
+            ? "Votre avis sur la formation"
+            : type === "positioning"
+              ? "Avant la formation : votre positionnement"
+              : "Quelques semaines après la formation"}
         </h1>
         <p className="text-muted-foreground">
           {enrollment.session.training.title} · {formatDateRange(enrollment.session.slots.map((slot) => slot.startsAt))}

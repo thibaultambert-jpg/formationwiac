@@ -312,6 +312,7 @@ export function EditEnrollmentDialog({
     appliedPrice: string | undefined;
     billingCompany: SearchOption | null;
     cancellationReason: string | null;
+    dropoutReason: string | null;
   };
 }) {
   const [open, setOpen] = useState(false);
@@ -338,6 +339,13 @@ export function EditEnrollmentDialog({
             name="cancellationReason"
             label="Motif d'annulation"
             defaultValue={enrollment.cancellationReason}
+            rows={2}
+          />
+          <TextareaField
+            name="dropoutReason"
+            label="Motif d'abandon"
+            hint="Obligatoire avec le statut « Abandon » (formation commencée)."
+            defaultValue={enrollment.dropoutReason}
             rows={2}
           />
           <SelectField

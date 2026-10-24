@@ -57,6 +57,7 @@ export async function enrollSelf(_state: ActionState, formData: FormData): Promi
         source: "front",
         actorId: user.id,
         motivation: text(formData, "motivation"),
+        adaptationNeed: text(formData, "adaptationNeed"),
       });
     });
     scheduleEnrollmentNotices([{ enrollmentId: enrollment.id, notice: noticeForStatus(enrollment.status) }]);

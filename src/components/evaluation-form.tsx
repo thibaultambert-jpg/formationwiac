@@ -6,7 +6,7 @@ import { ActionForm, SubmitButton, useFieldError, useFieldValue } from "@/compon
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionState } from "@/server/forms";
-import { submitEvaluation } from "@/app/(public)/actions";
+import { submitEvaluation, submitStakeholderEvaluation } from "@/app/(public)/actions";
 
 export type FormQuestion = {
   id: string;
@@ -69,7 +69,16 @@ function Choices({ question, values, hints }: { question: FormQuestion; values: 
   );
 }
 
-export function EvaluationForm({ token, questions }: { token: string; questions: FormQuestion[] }) {
+export function EvaluationForm({
+  token,
+  questions,
+  stakeholder = false,
+}: {
+  token: string;
+  questions: FormQuestion[];
+  /** Company or trainer questionnaire (D9) instead of a trainee one. */
+  stakeholder?: boolean;
+}) {
   const [done, setDone] = useState<string | null>(null);
   if (done) {
     return (
@@ -84,7 +93,7 @@ export function EvaluationForm({ token, questions }: { token: string; questions:
   }
   return (
     <ActionForm
-      action={submitEvaluation}
+      action={stakeholder ? submitStakeholderEvaluation : submitEvaluation}
       hideSuccess
       onSuccess={(state: ActionState) => setDone(state.status === "success" ? (state.message ?? "Merci !") : null)}
       className="space-y-6"

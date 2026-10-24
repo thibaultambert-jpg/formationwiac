@@ -9,7 +9,9 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
   const { id } = await params;
   const session = await db.trainingSession.findUnique({ where: { id }, select: { reference: true } });
   if (!session) return new Response("Session introuvable", { status: 404 });
-  const evaluations = await Promise.all([sessionEvaluations(id, "hot"), sessionEvaluations(id, "cold")]);
+  const evaluations = await Promise.all(
+    (["positioning", "hot", "cold", "company", "trainer"] as const).map((type) => sessionEvaluations(id, type)),
+  );
   return csvResponse(answersCsv(evaluations), `evaluations-${session.reference}`, {
     userId: user.id,
     entity: "session",

@@ -22,7 +22,7 @@ export async function bpfRows(year: number): Promise<BpfRow[]> {
   const end = parisMonthBounds(year + 1, 1).start;
   const enrollments = await db.enrollment.findMany({
     where: {
-      status: { in: ["confirmed", "present", "absent"] },
+      status: { in: ["confirmed", "present", "absent", "dropped_out"] },
       session: { status: { not: "cancelled" }, slots: { some: { startsAt: { gte: start, lt: end } } } },
     },
     include: {
@@ -30,7 +30,11 @@ export async function bpfRows(year: number): Promise<BpfRow[]> {
       attendances: true,
       corrections: true,
       session: {
-        include: { training: { select: { title: true } }, slots: { orderBy: { startsAt: "asc" } } },
+        include: {
+          training: { select: { title: true } },
+          slots: { orderBy: { startsAt: "asc" } },
+          trainers: { select: { trainer: { select: { type: true } } } },
+        },
       },
     },
   });
@@ -54,6 +58,7 @@ export async function bpfRows(year: number): Promise<BpfRow[]> {
       fundingType: enrollment.fundingType,
       hours,
       revenue: firstInYear && enrollment.appliedPrice ? Number(enrollment.appliedPrice) : 0,
+      subcontracted: enrollment.session.trainers.some((link) => link.trainer.type === "external"),
       session: enrollment.session.reference,
       training: enrollment.session.training.title,
       participant: `${enrollment.participant.firstName} ${enrollment.participant.lastName}`,

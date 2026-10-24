@@ -60,14 +60,25 @@ export type RequirementInput = {
   agreementWaived: boolean;
   /** The prior information email (B3) was sent. */
   preInformationSent: boolean;
+  /** Needs analysis recorded: motivation, note or document (D2). */
+  needsAnalysisDone: boolean;
+  /** Entry assessment answered or uploaded (D3). */
+  positioningDone: boolean;
+  /** Learning assessment recorded (D5). */
+  learningAssessed: boolean;
 };
 
-/** Obligations of one enrollment, used by the session compliance panel. */
 /** Prior information is due for every trainee; blocking for externals and in the Qualiopi scope (B3). */
 export function preInformationRequired(participantType: ParticipantTypeValue, inScope: boolean): boolean {
   return participantType === "external" || inScope;
 }
 
+/** Entry assessment and learning assessment are blocking for externals of the Qualiopi scope only (D3, D5). */
+export function qualiopiExternal(participantType: ParticipantTypeValue, inScope: boolean): boolean {
+  return participantType === "external" && inScope;
+}
+
+/** Obligations of one enrollment, used by the session compliance panel and the closure. */
 export function requirementsFor(input: RequirementInput): Requirement[] {
   const external = input.participantType === "external";
   const blocking = preInformationRequired(input.participantType, input.inScope);
@@ -86,7 +97,28 @@ export function requirementsFor(input: RequirementInput): Requirement[] {
     blocking: true,
     satisfied: input.preInformationSent,
   });
-  return requirements.map((requirement) => ({ ...requirement, blocking: requirement.blocking && blocking }));
+  requirements.push({
+    key: "needs_analysis",
+    label: "Analyse du besoin (motivation, recueil ou document)",
+    blocking: true,
+    satisfied: input.needsAnalysisDone,
+  });
+  const strict = qualiopiExternal(input.participantType, input.inScope);
+  return [
+    ...requirements.map((requirement) => ({ ...requirement, blocking: requirement.blocking && blocking })),
+    {
+      key: "positioning",
+      label: "Positionnement à l'entrée (questionnaire ou test)",
+      blocking: strict,
+      satisfied: input.positioningDone,
+    },
+    {
+      key: "learning",
+      label: "Évaluation des acquis",
+      blocking: strict,
+      satisfied: input.learningAssessed,
+    },
+  ];
 }
 
 /** Documents sent to external trainees must show the SIRET and the activity declaration number (B1). */

@@ -95,6 +95,8 @@ export type EnrollInput = {
   actorId: string;
   motivation?: string | null;
   fundingType?: FundingType | null;
+  /** Adaptation need given by the trainee (D8); never written to the audit log. */
+  adaptationNeed?: string | null;
 };
 
 /**
@@ -140,6 +142,7 @@ export async function enrollParticipant(tx: Tx, input: EnrollInput) {
     enrolledById: input.actorId,
     enrolledAt: new Date(),
     motivation: input.motivation ?? null,
+    ...(input.adaptationNeed !== undefined ? { adaptationNeed: input.adaptationNeed } : {}),
     participantType: participant.type,
     fundingType: input.fundingType ?? existing?.fundingType ?? defaultFunding(participant.type),
     cancelledAt: null,
@@ -189,6 +192,8 @@ export type EnrollmentUpdate = {
   appliedPrice: number | null;
   billingCompanyId: string | null;
   cancellationReason: string | null;
+  /** Reason of a dropout (D6), required with the status `dropped_out`. */
+  dropoutReason?: string | null;
 };
 
 /** Changes an enrollment from the BO; freeing a seat promotes the waitlist. */
@@ -201,6 +206,19 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
       throw new EnrollmentError(
         "Une inscription externe ne peut être confirmée qu'avec une convention signée ou une dérogation motivée.",
       );
+    }
+
+    if (statusChanged && update.status === "dropped_out") {
+      if (!update.dropoutReason?.trim()) throw new EnrollmentError("Indiquez le motif de l'abandon.");
+      if (!["confirmed", "present", "absent"].includes(current.status)) {
+        throw new EnrollmentError("Seul un stagiaire inscrit peut abandonner la formation.");
+      }
+      const started = await tx.sessionSlot.count({ where: { sessionId: session.id, startsAt: { lte: new Date() } } });
+      if (started === 0) {
+        throw new EnrollmentError(
+          "La formation n'a pas commencé : annulez l'inscription plutôt que de déclarer un abandon.",
+        );
+      }
     }
 
     if (statusChanged && holdsSeat(update.status) && !holdsSeat(current.status)) {
@@ -225,6 +243,12 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
             cancellationReason: update.cancellationReason,
           }
         : { cancelledAt: null, cancellationReason: null }),
+      ...(update.status === "dropped_out"
+        ? {
+            droppedOutAt: current.status === "dropped_out" ? current.droppedOutAt : new Date(),
+            dropoutReason: update.dropoutReason ?? current.dropoutReason,
+          }
+        : { droppedOutAt: null, dropoutReason: null }),
       // Going back to the waitlist puts the enrollment at the end of the queue.
       ...(statusChanged && update.status === "waitlisted" ? { enrolledAt: new Date() } : {}),
     };
@@ -245,7 +269,7 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
         fundingType: update.fundingType ?? current.fundingType,
         appliedPrice: update.appliedPrice,
         billingCompanyId: update.billingCompanyId,
-        reason: update.cancellationReason,
+        reason: update.status === "dropped_out" ? update.dropoutReason : update.cancellationReason,
       },
     });
 

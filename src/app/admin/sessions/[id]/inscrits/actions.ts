@@ -382,11 +382,12 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
 
 const updateSchema = z.object({
   enrollmentId: z.uuid(),
-  status: z.enum(["confirmed", "pending_agreement", "waitlisted", "cancelled", "present", "absent"]),
+  status: z.enum(["confirmed", "pending_agreement", "waitlisted", "cancelled", "present", "absent", "dropped_out"]),
   fundingType: fundingSchema.optional(),
   appliedPrice: z.number({ error: "Prix invalide." }).min(0, "Prix invalide.").nullable(),
   billingCompanyId: z.uuid().nullable(),
   cancellationReason: z.string().nullable(),
+  dropoutReason: z.string().nullable(),
 });
 
 export async function updateEnrollmentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -398,6 +399,7 @@ export async function updateEnrollmentAction(_state: ActionState, formData: Form
     appliedPrice: parseFrenchDecimal(text(formData, "appliedPrice")),
     billingCompanyId: text(formData, "billingCompanyId"),
     cancellationReason: text(formData, "cancellationReason"),
+    dropoutReason: text(formData, "dropoutReason"),
   });
   if (!parsed.success)
     return errorState(formData, "Certains champs sont invalides.", zodFieldErrors(parsed.error.issues));

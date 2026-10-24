@@ -73,6 +73,13 @@ by lot (section 11) and stops at the end of each lot for validation.
   prerendered at build time.
 - Prior information (`src/server/services/pre-information.ts`) and every email record the SHA-256 (and version) of
   their attachments in `documents.attachments`. Certificates of completion count signed hours only.
+- Quality (lot 4): pedagogical follow-up in `src/server/services/pedagogy.ts` (needs analysis, positioning file,
+  learning assessment, adaptation need). `Enrollment.adaptationNeed` is restricted: read it only through
+  `readAdaptationNeed()` (audited), never export, print or log it. Requirements D2, D3, D5 are in `requirementsFor()`;
+  certificates of Qualiopi externals wait for the learning assessment. Automatic quality sends (positioning,
+  absence alerts, company and trainer questionnaires in `StakeholderEvaluation`) are in
+  `src/server/services/quality-sends.ts`; registers and indicators in `src/server/services/quality.ts` and
+  `indicators.ts`, pages under `/admin/qualite`.
 - Every CSV export goes through `csvResponse()` with an audit trace (G2); admin downloads of nominative files are
   audited in `/fichiers`. Security headers: `src/lib/security-headers.ts` (applied in `next.config.ts`).
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by

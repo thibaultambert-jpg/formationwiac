@@ -58,6 +58,7 @@ export async function GET(request: Request) {
       PARTICIPANT_TYPE_LABELS[line.key as keyof typeof PARTICIPANT_TYPE_LABELS] ?? line.key,
       line,
     ]),
+    ["Sous-traitance", "Formateurs externes", summary.subcontracted],
     ["Total", "Total", summary.total],
   ];
   const csv = toCsv(

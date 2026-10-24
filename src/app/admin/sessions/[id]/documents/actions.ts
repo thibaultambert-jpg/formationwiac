@@ -17,12 +17,14 @@ import {
   type SendReport,
 } from "@/server/services/session-documents";
 import { sendPreTrainingInformation } from "@/server/services/pre-information";
+import { sendPositioningRequests, sendStakeholderEvaluations } from "@/server/services/quality-sends";
 
 function summary(label: string, report: SendReport): ActionState {
   const parts = [
     `${report.sent} envoyé(s)`,
     report.skipped ? `${report.skipped} ignoré(s)` : null,
     report.failed ? `${report.failed} en échec` : null,
+    report.held ? `${report.held} en attente de l'évaluation des acquis` : null,
   ].filter(Boolean);
   return { status: report.failed > 0 ? "error" : "success", message: `${label} : ${parts.join(", ")}.` };
 }
@@ -88,6 +90,31 @@ export async function sendHotEvaluationAction(_state: ActionState, formData: For
   });
   refresh();
   return summary("Évaluations", report);
+}
+
+export async function sendPositioningAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const session = await loadSession(formData);
+  if (!session) return errorState(formData, "Session introuvable.");
+  if (session.status === "cancelled" || session.status === "completed")
+    return errorState(formData, "Le positionnement s'envoie avant ou pendant la session.");
+  const report = await sendPositioningRequests(session.id, { automatic: false, actorId: actor.id });
+  refresh();
+  return summary("Positionnement", report);
+}
+
+export async function sendStakeholderAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const session = await loadSession(formData);
+  if (!session) return errorState(formData, "Session introuvable.");
+  if (session.status !== "completed")
+    return errorState(
+      formData,
+      "Les questionnaires entreprise et formateur sont envoyés une fois la session clôturée.",
+    );
+  const report = await sendStakeholderEvaluations(session.id, { automatic: false, actorId: actor.id });
+  refresh();
+  return summary("Questionnaires entreprise et formateur", report);
 }
 
 export async function sendCertificatesAction(_state: ActionState, formData: FormData): Promise<ActionState> {

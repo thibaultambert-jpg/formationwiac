@@ -100,8 +100,9 @@ export default async function BpfPage({ searchParams }: PageProps<"/admin/bpf">)
         <span className="font-semibold">{summary.total.trainees}</span> stagiaire(s),{" "}
         <span className="font-semibold">{formatDecimal(summary.total.hours)}</span> heure(s)-stagiaires,{" "}
         <span className="font-semibold">{formatEuros(summary.total.revenue)}</span> de produits HT en {filters.year}.
-        Seules les heures signées (émargement ou attestation) comptent ; un stagiaire sans heure signée n&apos;est pas
-        compté.
+        Dont {formatDecimal(summary.subcontracted.hours)} heure(s)-stagiaires animées par des formateurs externes
+        (sous-traitance). Seules les heures signées (émargement ou attestation) comptent ; un stagiaire sans heure
+        signée n&apos;est pas compté.
       </p>
       <div className="grid gap-8 lg:grid-cols-2">
         <LinesTable
