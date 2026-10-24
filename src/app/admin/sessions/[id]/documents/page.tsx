@@ -87,13 +87,14 @@ export default async function SessionDocumentsPage({ params }: PageProps<"/admin
           <Button asChild variant="outline">
             <a href={`/admin/sessions/${id}/documents/zip`}>
               <FileArchive aria-hidden="true" />
-              Télécharger les preuves (ZIP)
+              Télécharger le dossier complet (ZIP)
             </a>
           </Button>
         </div>
         <p className="text-muted-foreground text-sm">
-          Le ZIP contient la feuille d&apos;émargement signée, les attestations des participants présents, les
-          certificats de réalisation et les évaluations (réponses et synthèse). Les attestations sont envoyées
+          Le dossier complet contient la feuille d&apos;émargement définitive, le programme, les conventions, les
+          convocations, attestations et certificats de réalisation tels qu&apos;envoyés, les pièces pédagogiques, les
+          évaluations et un index.csv de tous les envois (date, destinataire, identifiant Gmail, empreintes). Les attestations sont envoyées
           automatiquement à la clôture de la session, avec le certificat de réalisation (heures émargées) pour les
           externes et les financements publics. L&apos;information préalable part à l&apos;inscription ; le bouton
           l&apos;envoie aux inscrits qui ne l&apos;ont pas encore reçue.
