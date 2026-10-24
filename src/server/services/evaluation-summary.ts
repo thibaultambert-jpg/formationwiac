@@ -5,7 +5,8 @@ import { formatDateTime } from "@/lib/dates";
 import { toCsv } from "@/server/domain/csv";
 import { summarize, type AnswerType, type QuestionSummary, type StoredAnswer } from "@/server/domain/evaluations";
 
-export const EVALUATION_TYPE_LABELS: Record<EvaluationType, string> = { hot: "À chaud", cold: "À froid" };
+export { EVALUATION_TYPE_LABELS } from "@/lib/labels";
+import { EVALUATION_TYPE_LABELS } from "@/lib/labels";
 
 export type SessionEvaluations = {
   type: EvaluationType;

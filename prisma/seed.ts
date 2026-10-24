@@ -69,6 +69,44 @@ const QUESTIONS: Record<EvaluationType, QuestionSeed[]> = {
     },
     { label: "Un exemple concret d'application ou une remarque ?", answerType: "text" },
   ],
+  positioning: [
+    { label: "Comment évaluez-vous votre niveau actuel sur le sujet de la formation ?", answerType: "scale_1_5" },
+    {
+      label: "Avez-vous déjà suivi une formation sur ce thème ?",
+      answerType: "single_choice",
+      options: ["Oui", "Non"],
+    },
+    {
+      label: "Utilisez-vous déjà ces compétences dans votre travail ?",
+      answerType: "single_choice",
+      options: ["Régulièrement", "Ponctuellement", "Jamais"],
+    },
+    { label: "Qu'attendez-vous de cette formation ?", answerType: "text" },
+  ],
+  company: [
+    { label: "Globalement, êtes-vous satisfait de la formation suivie par vos collaborateurs ?", answerType: "scale_1_5" },
+    {
+      label: "La formation a-t-elle répondu au besoin exprimé ?",
+      answerType: "single_choice",
+      options: ["Oui", "Partiellement", "Non"],
+    },
+    { label: "Comment évaluez-vous l'organisation (échanges, convention, documents) ?", answerType: "scale_1_5" },
+    { label: "Remarques ou besoins complémentaires ?", answerType: "text" },
+  ],
+  trainer: [
+    {
+      label: "Le niveau du groupe correspondait-il aux prérequis ?",
+      answerType: "single_choice",
+      options: ["Oui", "Partiellement", "Non"],
+    },
+    { label: "Les conditions matérielles et logistiques étaient-elles satisfaisantes ?", answerType: "scale_1_5" },
+    {
+      label: "Les objectifs ont-ils été atteints par le groupe ?",
+      answerType: "single_choice",
+      options: ["Oui", "Partiellement", "Non"],
+    },
+    { label: "Remarques et suggestions d'amélioration", answerType: "text" },
+  ],
 };
 
 const OPTIONAL_QUESTION_TYPES: QuestionAnswerType[] = ["text"];

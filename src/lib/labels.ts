@@ -21,6 +21,7 @@ export const ENROLLMENT_STATUS_LABELS = {
   cancelled: "Annulée",
   present: "Présente",
   absent: "Absente",
+  dropped_out: "Abandon",
 } as const;
 
 export const ENROLLMENT_SOURCE_LABELS = {
@@ -55,7 +56,64 @@ export const ENROLLMENT_STATUS_TONES: Record<keyof typeof ENROLLMENT_STATUS_LABE
   cancelled: "secondary",
   present: "info",
   absent: "destructive",
+  dropped_out: "destructive",
 };
+
+export const LEARNING_RESULT_LABELS = {
+  acquired: "Acquis",
+  partially_acquired: "Partiellement acquis",
+  not_acquired: "Non acquis",
+} as const;
+
+export const TRAINER_DOCUMENT_TYPE_LABELS = {
+  diploma: "Diplôme",
+  certification: "Certification ou attestation",
+  cv: "CV",
+  subcontracting_contract: "Contrat de sous-traitance",
+  insurance: "Assurance",
+  other: "Autre",
+} as const;
+
+export const COMPLAINT_STATUS_LABELS = {
+  open: "Ouverte",
+  in_progress: "En cours de traitement",
+  closed: "Clôturée",
+} as const;
+
+export const COMPLAINT_STATUS_TONES: Record<keyof typeof COMPLAINT_STATUS_LABELS, BadgeTone> = {
+  open: "destructive",
+  in_progress: "warning",
+  closed: "success",
+};
+
+export const IMPROVEMENT_SOURCE_LABELS = {
+  complaint: "Réclamation",
+  evaluation: "Questionnaire",
+  audit: "Audit",
+  other: "Autre",
+} as const;
+
+export const IMPROVEMENT_STATUS_LABELS = {
+  planned: "Prévue",
+  in_progress: "En cours",
+  done: "Réalisée",
+  abandoned: "Abandonnée",
+} as const;
+
+export const IMPROVEMENT_STATUS_TONES: Record<keyof typeof IMPROVEMENT_STATUS_LABELS, BadgeTone> = {
+  planned: "secondary",
+  in_progress: "warning",
+  done: "success",
+  abandoned: "secondary",
+};
+
+export const EVALUATION_TYPE_LABELS = {
+  hot: "À chaud",
+  cold: "À froid",
+  positioning: "Positionnement",
+  company: "Entreprise cliente",
+  trainer: "Formateur",
+} as const;
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   create: "Création",
