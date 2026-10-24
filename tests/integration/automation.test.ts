@@ -103,6 +103,14 @@ describe("scheduled tasks", () => {
     await runScheduledTasks(paris("2031-01-11T08:30:00+01:00"));
     expect(await sends(session.id, "reminder")).toBe(3); // 2 participants + 1 trainer
 
+    // Prior information (B3) to the externals, once, with the traced attachments.
+    expect(await sends(session.id, "pre_training_information")).toBe(2);
+    const information = await db.document.findFirstOrThrow({
+      where: { sessionId: session.id, type: "pre_training_information" },
+    });
+    expect(information.dedupKey).toMatch(/^pre-information:/);
+    expect(information.sentAt).not.toBeNull();
+
     // Attendance links on the morning of the day, idempotent.
     await runScheduledTasks(paris("2031-01-14T05:00:00+01:00"));
     expect(await sends(session.id, "attendance_link")).toBe(0);
@@ -132,6 +140,15 @@ describe("scheduled tasks", () => {
       }),
     ).toBe(1);
     expect(await sends(session.id, "evaluation_request")).toBe(1);
+    // Certificate of completion (B6) for the external, attached to the certificate email.
+    const completion = await db.document.findFirstOrThrow({
+      where: { sessionId: session.id, type: "completion_certificate" },
+    });
+    expect(completion.sha256).toMatch(/^[0-9a-f]{64}$/);
+    const certificateEmail = await db.document.findFirstOrThrow({
+      where: { sessionId: session.id, type: "certificate", filePath: { not: { endsWith: ".pdf" } } },
+    });
+    expect(JSON.stringify(certificateEmail.attachments)).toContain("completion_certificate");
 
     // Reminder 5 days later when not answered, then cold evaluation at J+60.
     await runScheduledTasks(paris("2031-01-20T07:00:00+01:00"));

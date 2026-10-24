@@ -32,3 +32,30 @@ test("the Google button starts the OAuth flow restricted to the domain", async (
   await page.getByRole("button", { name: "Se connecter avec Google" }).click();
   await expect.poll(() => authorizeUrl?.searchParams.get("hd")).toBe(process.env.ALLOWED_GOOGLE_DOMAIN);
 });
+
+test("the legal pages are public, linked from the login page (F1, F2, F3)", async ({ page }) => {
+  await page.goto("/connexion");
+  await page.getByRole("link", { name: "Confidentialité" }).click();
+  await expect(page.getByRole("heading", { name: "Politique de confidentialité" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Durées de conservation" })).toBeVisible();
+  await page.goto("/mentions-legales");
+  await expect(page.getByRole("heading", { name: "Mentions légales" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hébergement" })).toBeVisible();
+  await page.goto("/reglement-interieur");
+  await expect(page.getByRole("heading", { name: "Règlement intérieur" })).toBeVisible();
+  // Short GDPR notice in the footer of the public pages (E2)
+  // (its text is editable in the settings, so only its presence is checked here).
+  await expect(page.locator('[data-slot="privacy-notice"]')).not.toBeEmpty();
+});
+
+test("responses carry the security headers (E7)", async ({ request }) => {
+  const response = await request.get("/connexion");
+  const headers = response.headers();
+  expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+  expect(headers["x-frame-options"]).toBe("DENY");
+  expect(headers["x-content-type-options"]).toBe("nosniff");
+  expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(headers["strict-transport-security"]).toContain("max-age=");
+  expect(headers["permissions-policy"]).toContain("camera=()");
+  expect(headers["x-powered-by"]).toBeUndefined();
+});

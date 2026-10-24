@@ -23,6 +23,10 @@ const trainingSchema = z.object({
   targetAudience: z.string().nullable(),
   programText: z.string().nullable(),
   thingsToBring: z.string().nullable(),
+  accessDelay: z.string().nullable(),
+  teachingMethods: z.string().nullable(),
+  evaluationMethods: z.string().nullable(),
+  accessibility: z.string().nullable(),
   durationHours: z
     .number({ error: (issue) => (issue.input === undefined ? "Durée obligatoire." : "Nombre invalide.") })
     .refine((value) => value > 0 && value <= 9999, "Durée invalide."),
@@ -41,6 +45,10 @@ function parseTraining(formData: FormData) {
     targetAudience: text(formData, "targetAudience"),
     programText: text(formData, "programText"),
     thingsToBring: text(formData, "thingsToBring"),
+    accessDelay: text(formData, "accessDelay"),
+    teachingMethods: text(formData, "teachingMethods"),
+    evaluationMethods: text(formData, "evaluationMethods"),
+    accessibility: text(formData, "accessibility"),
     durationHours: parseFrenchDecimal(text(formData, "durationHours")) ?? undefined,
     modality: text(formData, "modality") ?? undefined,
     priceExclTax: parseFrenchDecimal(text(formData, "priceExclTax")),

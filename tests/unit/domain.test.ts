@@ -183,9 +183,8 @@ describe("GDPR retention", async () => {
     expect(anonymizedEmail("abc")).toBe("anonyme+abc@anonymise.invalid");
   });
 
-  const { DEFAULT_RETENTION, daysBefore, monthsBefore, retentionExpired, validRetentionPolicy } = await import(
-    "@/server/domain/privacy"
-  );
+  const { DEFAULT_RETENTION, daysBefore, monthsBefore, retentionExpired, validRetentionPolicy } =
+    await import("@/server/domain/privacy");
   const old = new Date("2020-01-01T00:00:00Z");
 
   it("applies the external period after the last training", () => {

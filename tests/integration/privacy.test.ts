@@ -145,7 +145,11 @@ describe("GDPR", () => {
   it("never purges under legal hold (E5)", async () => {
     const heldParticipant = await externalWithEnrollment(new Date("2019-03-01T12:00:00Z"));
     const heldSession = await externalWithEnrollment(new Date("2019-03-01T12:00:00Z"));
-    await setLegalHold({ kind: "participant", id: heldParticipant.participant.id }, "Contrôle OPCO", heldParticipant.actor.id);
+    await setLegalHold(
+      { kind: "participant", id: heldParticipant.participant.id },
+      "Contrôle OPCO",
+      heldParticipant.actor.id,
+    );
     await setLegalHold({ kind: "session", id: heldSession.session.id }, "Litige", heldSession.actor.id);
     const ids = (await participantsPastRetention(NOW, DEFAULT_RETENTION)).map((participant) => participant.id);
     expect(ids).not.toContain(heldParticipant.participant.id);

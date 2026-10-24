@@ -47,7 +47,9 @@ export function SiteFooter({ links = true, notice }: { links?: boolean; notice?:
       </div>
       {notice ? (
         <div className="mx-auto max-w-6xl px-4 pb-8">
-          <p className="text-muted-foreground max-w-3xl text-xs leading-relaxed">{notice}</p>
+          <p data-slot="privacy-notice" className="text-muted-foreground max-w-3xl text-xs leading-relaxed">
+            {notice}
+          </p>
         </div>
       ) : null}
     </footer>

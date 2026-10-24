@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,8 @@ export const metadata: Metadata = { title: "Règlement intérieur" };
 
 // Internal regulations in force (F3), readable by every trainee.
 export default async function RegulationPage() {
+  // Rendered per request: the texts and the version in force come from the settings.
+  await connection();
   const regulation = await currentRegulation();
   return (
     <article className="space-y-6">

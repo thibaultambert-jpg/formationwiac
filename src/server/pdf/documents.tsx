@@ -272,7 +272,10 @@ const ACTION_KINDS = [
  * Certificate of completion (certificat de réalisation, B6), following the
  * model of the French Ministry of Labour: only signed hours are counted.
  */
-export async function renderCompletionCertificate(documents: SessionDocuments, enrollment: Enrollment): Promise<Buffer> {
+export async function renderCompletionCertificate(
+  documents: SessionDocuments,
+  enrollment: Enrollment,
+): Promise<Buffer> {
   const { session, organization } = documents;
   const first = session.slots[0];
   const last = session.slots.at(-1);
@@ -308,8 +311,9 @@ export async function renderCompletionCertificate(documents: SessionDocuments, e
           </Text>
         ))}
         <Text style={{ marginTop: 8 }}>
-          qui s&apos;est déroulée {first && last ? `du ${formatDate(first.startsAt)} au ${formatDate(last.endsAt)}` : ""}{" "}
-          ({session.reference}, {MODALITY_LABELS[session.training.modality].toLowerCase()}), pour une durée réalisée de{" "}
+          qui s&apos;est déroulée{" "}
+          {first && last ? `du ${formatDate(first.startsAt)} au ${formatDate(last.endsAt)}` : ""} ({session.reference},{" "}
+          {MODALITY_LABELS[session.training.modality].toLowerCase()}), pour une durée réalisée de{" "}
           <Text style={styles.bold}>{formatDecimal(completionHours(documents, enrollment))} heures</Text> (heures
           émargées) sur {formatDecimal(totalHours(session.slots))} heures prévues.
         </Text>

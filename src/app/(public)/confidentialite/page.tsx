@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import { LegalText } from "@/components/legal/legal-text";
 import { privacyPolicyText } from "@/server/domain/legal";
@@ -8,6 +9,8 @@ export const metadata: Metadata = { title: "Confidentialité" };
 
 // Public privacy policy (E2, F2).
 export default async function PrivacyPage() {
+  // Rendered per request: the texts and the version in force come from the settings.
+  await connection();
   const [organization, retention] = await Promise.all([legalOrganization(), currentRetentionPolicy()]);
   return (
     <article className="space-y-6">
