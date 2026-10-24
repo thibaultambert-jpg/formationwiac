@@ -145,11 +145,14 @@ export async function runAutomationNow(): Promise<ActionState> {
   const parts = [
     `${report.preInformation} information(s) préalable(s)`,
     `${report.reminders} rappel(s)`,
+    `${report.positioning} positionnement(s)`,
     `${report.attendanceLinks} lien(s) d'émargement`,
+    `${report.absenceAlerts} alerte(s) d'absence`,
     `${report.closedSessions} session(s) clôturée(s)`,
     `${report.certificates} attestation(s)`,
     `${report.hotEvaluations + report.coldEvaluations} évaluation(s)`,
     `${report.evaluationReminders} relance(s)`,
+    `${report.stakeholderEvaluations} questionnaire(s) entreprise ou formateur`,
     `${report.anonymized} anonymisation(s)`,
   ];
   return report.errors.length

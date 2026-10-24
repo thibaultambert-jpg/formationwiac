@@ -32,6 +32,7 @@ export const TEMPLATE_VARIABLES = {
   referent_pedagogique: "Référent pédagogique",
   referent_administratif: "Référent administratif",
   lien_reglement: "Lien vers le règlement intérieur",
+  creneau: "Créneau concerné (alerte d'absence)",
 } as const;
 
 export type TemplateVariables = Partial<Record<keyof typeof TEMPLATE_VARIABLES | string, string>>;

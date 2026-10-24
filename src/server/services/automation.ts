@@ -6,6 +6,7 @@ import {
   closureDue,
   coldEvaluationDue,
   evaluationReminderDue,
+  positioningDue,
   reminderDue,
 } from "@/server/domain/automation";
 import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
@@ -26,6 +27,11 @@ import {
   sendEvaluationRequests,
 } from "@/server/services/session-documents";
 import { sendPreTrainingInformation } from "@/server/services/pre-information";
+import {
+  sendAbsenceAlerts,
+  sendPositioningRequests,
+  sendStakeholderEvaluations,
+} from "@/server/services/quality-sends";
 import { issueToken } from "@/server/tokens";
 import { getEnv } from "@/lib/env";
 import { retentionPolicy } from "@/server/domain/privacy";
@@ -36,6 +42,9 @@ export type AutomationReport = {
   attendanceLinks: number;
   closedSessions: number;
   certificates: number;
+  positioning: number;
+  absenceAlerts: number;
+  stakeholderEvaluations: number;
   hotEvaluations: number;
   coldEvaluations: number;
   evaluationReminders: number;
@@ -78,6 +87,9 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
     attendanceLinks: 0,
     closedSessions: 0,
     certificates: 0,
+    positioning: 0,
+    absenceAlerts: 0,
+    stakeholderEvaluations: 0,
     hotEvaluations: 0,
     coldEvaluations: 0,
     evaluationReminders: 0,
@@ -92,6 +104,7 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
   const coldDays = settings?.coldEvaluationDays ?? 60;
   const evaluationReminderDays = settings?.evaluationReminderDays ?? 5;
   const retention = retentionPolicy(settings);
+  const positioningDays = settings?.positioningDaysBefore ?? 7;
 
   const active = await db.trainingSession.findMany({
     where: { status: { in: ["published", "full"] }, slots: { some: {} } },
@@ -150,6 +163,14 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
     }
   });
 
+  // Entry assessment J-N before the session (D3).
+  await step(report, "Positionnement", async () => {
+    for (const session of active) {
+      if (!positioningDue(session.slots[0].startsAt, positioningDays, now)) continue;
+      report.positioning += (await sendPositioningRequests(session.id, { automatic: true, actorId })).sent;
+    }
+  });
+
   // Attendance link on each session day.
   await step(report, "Liens d'émargement", async () => {
     for (const session of active) {
@@ -168,6 +189,26 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
       report.closedSessions++;
       report.certificates += result.certificates.sent;
       report.hotEvaluations += result.evaluations.sent;
+    }
+  });
+
+  // Unsigned slots of the day: alert to the pedagogical referent (D6).
+  await step(report, "Alertes d'absence", async () => {
+    report.absenceAlerts += await sendAbsenceAlerts(now);
+  });
+
+  // Company and trainer questionnaires after the closure (D9), for 30 days.
+  await step(report, "Questionnaires entreprise et formateur", async () => {
+    const recent = await db.trainingSession.findMany({
+      where: {
+        status: "completed",
+        slots: { some: { endsAt: { gte: new Date(now.getTime() - 30 * 24 * 3_600_000) } } },
+        NOT: { slots: { some: { endsAt: { gt: now } } } },
+      },
+      select: { id: true },
+    });
+    for (const session of recent) {
+      report.stakeholderEvaluations += (await sendStakeholderEvaluations(session.id, { automatic: true, actorId })).sent;
     }
   });
 

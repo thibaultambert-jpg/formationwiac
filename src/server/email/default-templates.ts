@@ -4,6 +4,21 @@ import type { DocumentType } from "@/generated/prisma/enums";
 
 export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body: string }[] = [
   {
+    key: "positioning_request",
+    subject: "Avant la formation {{formation}} : questionnaire de positionnement",
+    body: "Bonjour {{prenom}},\n\nVous allez suivre la formation « {{formation}} » ({{dates}}). Pour adapter la formation à votre niveau et à vos attentes, merci de répondre à ce court questionnaire de positionnement :\n\n{{lien_evaluation}}\n\nMerci,",
+  },
+  {
+    key: "stakeholder_evaluation_request",
+    subject: "Votre avis sur la formation {{formation}}",
+    body: "Bonjour {{prenom}},\n\nLa session « {{formation}} » ({{reference}}) est terminée. Votre retour nous aide à améliorer nos formations : pouvez-vous répondre à ce court questionnaire ?\n\n{{lien_evaluation}}\n\nMerci,",
+  },
+  {
+    key: "absence_alert",
+    subject: "Absences à vérifier : {{formation}} ({{reference}})",
+    body: "Bonjour,\n\nLes stagiaires suivants n'ont pas émargé le créneau du {{creneau}} de la formation « {{formation}} » ({{reference}}) :\n\n{{inscrits}}\n\nMerci de vérifier leur présence et de saisir une absence, un retard ou un abandon avec son motif dans l'onglet Émargement.",
+  },
+  {
     key: "pre_training_information",
     subject: "Information préalable : {{formation}}",
     body: "Bonjour {{prenom}},\n\nVous êtes inscrit(e) à la formation « {{formation}} ». Voici les informations à connaître avant de la suivre.\n\nObjectifs :\n{{objectifs}}\n\nPrérequis : {{prerequis}}\nDurée : {{duree}}\nModalité : {{modalite}}\nDates :\n{{dates}}\nLieu : {{lieu}}\nDélai d'accès : {{delai_acces}}\nMéthodes pédagogiques : {{methodes}}\nModalités d'évaluation : {{modalites_evaluation}}\nAccessibilité et adaptations : {{accessibilite}}\n\nVos contacts :\n- Référent pédagogique : {{referent_pedagogique}}\n- Référent administratif : {{referent_administratif}}\n- Référent handicap : {{referent_handicap}}\n\nLe programme et le règlement intérieur sont joints à ce message ; le règlement est aussi consultable ici : {{lien_reglement}}\n\n{{mention_rgpd}}\n\nCordialement,",
@@ -72,6 +87,9 @@ export const DEFAULT_EMAIL_TEMPLATES: { key: DocumentType; subject: string; body
 
 /** Email types sent automatically from lot 3; the others arrive with lot 4. */
 export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
+  "positioning_request",
+  "stakeholder_evaluation_request",
+  "absence_alert",
   "pre_training_information",
   "enrollment_confirmation",
   "waitlist_notice",
@@ -88,6 +106,9 @@ export const ACTIVE_EMAIL_TYPES: readonly DocumentType[] = [
 ];
 
 export const EMAIL_TYPE_LABELS: Record<string, string> = {
+  positioning_request: "Questionnaire de positionnement",
+  stakeholder_evaluation_request: "Questionnaire entreprise ou formateur",
+  absence_alert: "Alerte d'absence (référent)",
   pre_training_information: "Information préalable",
   enrollment_confirmation: "Inscription confirmée",
   waitlist_notice: "Placement en liste d'attente",
@@ -105,6 +126,9 @@ export const EMAIL_TYPE_LABELS: Record<string, string> = {
 
 /** Document types that are emails (the others are generated PDF files). */
 export const EMAIL_DOCUMENT_TYPES: DocumentType[] = [
+  "positioning_request",
+  "stakeholder_evaluation_request",
+  "absence_alert",
   "pre_training_information",
   "enrollment_confirmation",
   "waitlist_notice",

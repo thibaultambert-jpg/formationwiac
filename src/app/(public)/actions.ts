@@ -141,10 +141,54 @@ export async function assessAsTrainer(_state: ActionState, formData: FormData): 
   return { status: "success", message: "Évaluation des acquis enregistrée." };
 }
 
+const TOKEN_EVALUATION_TYPES = { hot_evaluation: "hot", cold_evaluation: "cold", positioning: "positioning" } as const;
+
+/** Validates the answers against the active questions of a questionnaire. */
+async function checkAnswers(type: "hot" | "cold" | "positioning" | "company" | "trainer", formData: FormData) {
+  const questions = await db.evaluationQuestion.findMany({
+    where: { evaluationType: type, active: true },
+    orderBy: { position: "asc" },
+  });
+  return validateAnswers(
+    questions.map((question) => ({
+      ...question,
+      answerType: question.answerType as AnswerType,
+      options: (question.options as string[] | null) ?? null,
+    })),
+    formValues(formData),
+  );
+}
+
+/** Company or trainer questionnaire of a session (D9). */
+export async function submitStakeholderEvaluation(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const record = await resolveToken(text(formData, "token") ?? "", ["stakeholder_evaluation"]);
+  const evaluation = record?.stakeholderEvaluationId
+    ? await db.stakeholderEvaluation.findUnique({ where: { id: record.stakeholderEvaluationId } })
+    : null;
+  if (!evaluation || (evaluation.type !== "company" && evaluation.type !== "trainer"))
+    return errorState(formData, "Ce lien n'est plus valide.");
+  if (evaluation.submittedAt) return { status: "success", message: "Vous avez déjà répondu à ce questionnaire. Merci !" };
+  const result = await checkAnswers(evaluation.type, formData);
+  if (!result.ok) return errorState(formData, "Merci de répondre aux questions obligatoires.", result.errors);
+  await db.stakeholderEvaluation.update({
+    where: { id: evaluation.id },
+    data: { answers: result.answers, globalScore: globalScore(result.answers), submittedAt: new Date() },
+  });
+  await audit(db, {
+    userId: null,
+    action: "create",
+    entity: "session",
+    entityId: evaluation.sessionId,
+    after: { evaluation: evaluation.type },
+  });
+  refresh();
+  return { status: "success", message: "Merci pour vos réponses !" };
+}
+
 export async function submitEvaluation(_state: ActionState, formData: FormData): Promise<ActionState> {
-  const record = await resolveToken(text(formData, "token") ?? "", ["hot_evaluation", "cold_evaluation"]);
+  const record = await resolveToken(text(formData, "token") ?? "", ["hot_evaluation", "cold_evaluation", "positioning"]);
   if (!record?.enrollmentId) return errorState(formData, "Ce lien d'évaluation n'est plus valide.");
-  const type = record.purpose === "hot_evaluation" ? "hot" : "cold";
+  const type = TOKEN_EVALUATION_TYPES[record.purpose as keyof typeof TOKEN_EVALUATION_TYPES];
   const evaluation = await db.evaluation.upsert({
     where: { enrollmentId_type: { enrollmentId: record.enrollmentId, type } },
     update: {},
@@ -153,18 +197,7 @@ export async function submitEvaluation(_state: ActionState, formData: FormData):
   if (evaluation.submittedAt)
     return { status: "success", message: "Vous avez déjà répondu à ce questionnaire. Merci !" };
 
-  const questions = await db.evaluationQuestion.findMany({
-    where: { evaluationType: type, active: true },
-    orderBy: { position: "asc" },
-  });
-  const result = validateAnswers(
-    questions.map((question) => ({
-      ...question,
-      answerType: question.answerType as AnswerType,
-      options: (question.options as string[] | null) ?? null,
-    })),
-    formValues(formData),
-  );
+  const result = await checkAnswers(type, formData);
   if (!result.ok) return errorState(formData, "Merci de répondre aux questions obligatoires.", result.errors);
 
   await db.evaluation.update({

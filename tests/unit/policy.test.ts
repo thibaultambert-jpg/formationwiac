@@ -75,6 +75,7 @@ describe("decideAccess", () => {
     expect(decideAccess("/api/auth/callback/google", null)).toBe("allow");
     expect(decideAccess("/emargement/abc", null)).toBe("allow");
     expect(decideAccess("/evaluation/abc", null)).toBe("allow");
+    expect(decideAccess("/questionnaire/abc", null)).toBe("allow");
     expect(decideAccess("/api/cron", null)).toBe("allow");
     expect(decideAccess("/emargements", null)).toBe("login");
   });

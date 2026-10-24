@@ -22,6 +22,7 @@ export async function issueToken(
     sessionId?: string;
     trainerId?: string;
     slotId?: string;
+    stakeholderEvaluationId?: string;
   },
 ): Promise<string> {
   const token = randomBytes(32).toString("base64url");
