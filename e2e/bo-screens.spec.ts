@@ -95,7 +95,8 @@ test("companies: contacts, duplicates merge and export", async ({ page }) => {
   await dialog.getByRole("textbox", { name: "Nom", exact: true }).fill("Durand");
   await dialog.getByRole("textbox", { name: "Email" }).fill(`marie.${stamp}@durand.example`);
   await dialog.getByRole("button", { name: "Ajouter" }).click();
-  await expect(page.getByText("Contact principal")).toBeVisible();
+  // "Contact principal" is also a field label: look for the badge in the contacts list.
+  await expect(page.getByRole("region", { name: "Contacts (1)" }).getByText("Contact principal")).toBeVisible();
 
   // Same name: warning, then a duplicate with one contact.
   await page.goto("/admin/entreprises/nouvelle");

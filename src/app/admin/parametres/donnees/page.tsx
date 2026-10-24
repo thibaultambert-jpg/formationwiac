@@ -151,7 +151,8 @@ export default async function PersonalDataPage() {
           <Link href="/admin/entreprises/participants" className="text-primary underline underline-offset-4">
             la liste des participants
           </Link>{" "}
-          : « Exporter ses données » produit une archive ZIP (données JSON avec l&apos;historique, signatures, documents envoyés, pièces pédagogiques), « Anonymiser » efface son identité.
+          : « Exporter ses données » produit une archive ZIP (données JSON avec l&apos;historique, signatures, documents
+          envoyés, pièces pédagogiques), « Anonymiser » efface son identité.
         </p>
       </section>
     </div>

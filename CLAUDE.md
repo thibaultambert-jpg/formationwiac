@@ -80,6 +80,10 @@ by lot (section 11) and stops at the end of each lot for validation.
   absence alerts, company and trainer questionnaires in `StakeholderEvaluation`) are in
   `src/server/services/quality-sends.ts`; registers and indicators in `src/server/services/quality.ts` and
   `indicators.ts`, pages under `/admin/qualite`.
+- The full session dossier ZIP is built by `src/server/services/session-dossier.ts` (frozen sheet, program,
+  agreements, documents as sent, outbox emails, pedagogical files, evaluations, `index.csv` of every send); the GDPR
+  right of access is a ZIP (`exportParticipantArchive()`). Accessibility: `e2e/bo-a11y.spec.ts` runs axe-core
+  (WCAG 2.1 A/AA) on the main screens; a new screen must be added there.
 - Every CSV export goes through `csvResponse()` with an audit trace (G2); admin downloads of nominative files are
   audited in `/fichiers`. Security headers: `src/lib/security-headers.ts` (applied in `next.config.ts`).
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by

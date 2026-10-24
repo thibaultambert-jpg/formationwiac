@@ -76,17 +76,17 @@ export async function buildSessionDossier(sessionId: string) {
       continue;
     }
     if (!document.filePath) continue;
-    if (PDF_FOLDERS[document.type]) {
+    // A PDF of a kind (convocation, certificate…) or the copy of an email of the same type.
+    const pdfFolder = document.filePath.endsWith(".pdf") ? PDF_FOLDERS[document.type] : undefined;
+    if (pdfFolder) {
       const key = `${document.type}:${document.enrollmentId}`;
       if (seen.has(key)) continue;
       seen.add(key);
     }
     const person = document.enrollmentId ? people.get(document.enrollmentId) : null;
-    const pdfFolder = PDF_FOLDERS[document.type];
     const path = pdfFolder
       ? `${pdfFolder.folder}/${safeFileName(`${document.type}-${person ?? session.reference}`)}.pdf`
       : `envois/${safeFileName(`${formatDateTime(document.createdAt)}-${document.type}-${person ?? "session"}`)}.eml`;
-    if (pdfFolder && !document.filePath.endsWith(".pdf")) continue;
     const added = await addStored(files, path, document.filePath);
     if (added) location.set(document.id, added);
   }

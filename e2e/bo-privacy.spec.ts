@@ -1,3 +1,4 @@
+import { unzipSync } from "fflate";
 import { expect, test } from "@playwright/test";
 import { createTraining } from "./support/db";
 import { createSessionViaUi, isoDate } from "./support/session";
@@ -23,7 +24,10 @@ test("GDPR: export and anonymize an external participant", async ({ page }) => {
   await page.getByRole("link", { name: `Romane Oubli${stamp}` }).click();
   await expect(page).toHaveURL(/\/admin\/entreprises\/participants\/[0-9a-f-]+$/);
   const exportResponse = await page.request.get(`${new URL(page.url()).pathname}/export`);
-  const data = await exportResponse.json();
+  // Right of access as a ZIP (E6): the JSON and the files.
+  expect(exportResponse.headers()["content-type"]).toBe("application/zip");
+  const archive = unzipSync(new Uint8Array(await exportResponse.body()));
+  const data = JSON.parse(new TextDecoder().decode(archive["donnees.json"]));
   expect(data.participant.email).toBe(`romane.${stamp}@rgpd.example`);
   expect(data.enrollments).toHaveLength(1);
 
