@@ -10,5 +10,10 @@ export async function GET(_request: Request, { params }: RouteContext<"/admin/se
   const session = await db.trainingSession.findUnique({ where: { id }, select: { reference: true } });
   if (!session) return new Response("Session introuvable", { status: 404 });
   const evaluations = await Promise.all([sessionEvaluations(id, "hot"), sessionEvaluations(id, "cold")]);
-  return csvResponse(answersCsv(evaluations), `evaluations-${session.reference}`);
+  return csvResponse(answersCsv(evaluations), `evaluations-${session.reference}`, {
+    userId: user.id,
+    entity: "session",
+    entityId: id,
+    rows: evaluations.reduce((sum, list) => sum + list.rows.length, 0),
+  });
 }

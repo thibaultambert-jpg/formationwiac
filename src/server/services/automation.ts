@@ -17,6 +17,7 @@ import {
   participantsPastRetention,
   PrivacyError,
   purgeProofFiles,
+  purgeTechnicalData,
 } from "@/server/services/privacy";
 import {
   closeSession,
@@ -24,10 +25,13 @@ import {
   sendCertificates,
   sendEvaluationRequests,
 } from "@/server/services/session-documents";
+import { sendPreTrainingInformation } from "@/server/services/pre-information";
 import { issueToken } from "@/server/tokens";
 import { getEnv } from "@/lib/env";
+import { retentionPolicy } from "@/server/domain/privacy";
 
 export type AutomationReport = {
+  preInformation: number;
   reminders: number;
   attendanceLinks: number;
   closedSessions: number;
@@ -37,6 +41,8 @@ export type AutomationReport = {
   evaluationReminders: number;
   anonymized: number;
   purgedFiles: number;
+  purgedTechnical: number;
+  purgedTokens: number;
   errors: string[];
 };
 
@@ -67,6 +73,7 @@ async function step(report: AutomationReport, name: string, run: () => Promise<v
  */
 export async function runScheduledTasks(now = new Date(), actorId: string | null = null): Promise<AutomationReport> {
   const report: AutomationReport = {
+    preInformation: 0,
     reminders: 0,
     attendanceLinks: 0,
     closedSessions: 0,
@@ -76,17 +83,27 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
     evaluationReminders: 0,
     anonymized: 0,
     purgedFiles: 0,
+    purgedTechnical: 0,
+    purgedTokens: 0,
     errors: [],
   };
   const settings = await db.organizationSettings.findUnique({ where: { id: 1 } });
   const reminderDays = settings?.reminderDaysBefore ?? 3;
   const coldDays = settings?.coldEvaluationDays ?? 60;
   const evaluationReminderDays = settings?.evaluationReminderDays ?? 5;
-  const retentionYears = settings?.dataRetentionYears ?? 5;
+  const retention = retentionPolicy(settings);
 
   const active = await db.trainingSession.findMany({
     where: { status: { in: ["published", "full"] }, slots: { some: {} } },
     include: sessionInclude,
+  });
+
+  // Prior information (B3) not sent yet, for sessions that have not started.
+  await step(report, "Informations préalables", async () => {
+    for (const session of active) {
+      if (session.slots[0].startsAt <= now) continue;
+      report.preInformation += (await sendPreTrainingInformation(session.id, { automatic: true, actorId })).sent;
+    }
   });
 
   // Reminder J-X to confirmed participants and trainers.
@@ -227,7 +244,7 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
 
   // GDPR retention: anonymize and purge proofs past the retention period.
   await step(report, "Durée de conservation", async () => {
-    for (const participant of await participantsPastRetention(now, retentionYears)) {
+    for (const participant of await participantsPastRetention(now, retention)) {
       try {
         await anonymizeParticipant(participant.id, actorId, "Fin de la durée de conservation");
         report.anonymized++;
@@ -235,7 +252,10 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
         if (!(error instanceof PrivacyError)) throw error;
       }
     }
-    report.purgedFiles = await purgeProofFiles(now, retentionYears, actorId);
+    report.purgedFiles = await purgeProofFiles(now, retention, actorId);
+    const technical = await purgeTechnicalData(now, retention, actorId);
+    report.purgedTechnical = technical.technical;
+    report.purgedTokens = technical.tokens;
   });
 
   const changed = Object.entries(report).some(([key, value]) =>

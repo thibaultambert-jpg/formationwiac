@@ -222,9 +222,18 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
 - **Évaluations** : les questionnaires (à chaud et à froid) se modifient dans **Paramètres › Évaluations et rappels**.
   Les réponses gardent le libellé des questions au moment de la réponse. L'onglet **Évaluations** de la session présente
   les moyennes, les répartitions et les verbatims, avec un export CSV.
-- **Documents** : convocation (PDF + programme) envoyée depuis l'onglet **Documents** ; attestation PDF avec la durée
-  réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement définitive, les attestations
-  telles qu'envoyées et les évaluations (réponses et synthèse).
+- **Documents** : convocation (PDF + programme, mention RGPD en fin d'email) envoyée depuis l'onglet **Documents** ;
+  attestation PDF avec la durée réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement
+  définitive, les attestations et certificats de réalisation tels qu'envoyés et les évaluations (réponses et synthèse).
+- **Information préalable** : envoyée automatiquement à l'inscription (et par la tâche quotidienne) aux externes et aux
+  sessions du périmètre Qualiopi ; le bouton **Envoyer l'information préalable** l'envoie aux autres inscrits. Elle
+  reprend la fiche formation (objectifs, méthodes, évaluation, délai d'accès, accessibilité), les contacts et joint le
+  programme et le règlement intérieur en vigueur ; l'empreinte et la version des pièces jointes sont enregistrées.
+  C'est une obligation de l'onglet **Conformité**.
+- **Certificat de réalisation** : généré avec l'attestation pour les externes et les financements publics, d'après les
+  seules heures signées ; joint à l'email de l'attestation et archivé avec son empreinte.
+- **Bilan (BPF)** : menu **Bilan (BPF)**, par année civile, stagiaires, heures signées et produits HT par financement
+  et par public, avec ou sans les collaborateurs internes ; exports CSV synthèse et détail.
 
 ## Rôles
 
@@ -245,10 +254,21 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
   de la durée de conservation. Pour un collaborateur, le compte est aussi anonymisé et désactivé : une nouvelle connexion
   Google crée un nouveau compte vierge. Les administrateurs et les comptes liés à une fiche formateur doivent d'abord
   être modifiés.
-- **Durée de conservation** : **Paramètres › Données personnelles** (5 ans par défaut). La page liste les participants
-  dont la dernière formation date de plus longtemps et permet de les anonymiser en une fois, ainsi que de supprimer les
-  fichiers de preuve expirés (signatures, documents générés). La tâche quotidienne fait ces deux opérations
-  automatiquement.
+- **Durées de conservation** : **Paramètres › Données personnelles** : externes 5 ans après leur dernière formation,
+  internes 5 ans après leur départ (date de départ saisie dans **Utilisateurs et rôles**), traces techniques des
+  signatures (IP, navigateur) 12 mois, liens expirés 7 jours. La page liste les participants à anonymiser, les fichiers
+  de preuve expirés (sessions dont tous les stagiaires sont anonymisés) et purge les traces techniques. La tâche
+  quotidienne applique ces règles automatiquement.
+- **Conservation légale** : depuis l'onglet **Conformité** d'une session ou la fiche d'un participant, avec un motif ;
+  elle suspend toute anonymisation et toute purge tant qu'elle n'est pas levée.
+- **Textes légaux** : **Paramètres › Informations légales** : mention courte (pages publiques, convocations,
+  information préalable), politique de confidentialité (`/confidentialite`), mentions légales (`/mentions-legales`),
+  contacts (DPO, référents) et règlement intérieur versionné (`/reglement-interieur`). Les modèles proposés sont à
+  faire valider par le DPO.
+- **Exports** : chaque export CSV, PDF ou fichier nominatif téléchargé par un admin est inscrit au journal d'audit
+  (auteur, fichier, filtres, nombre de lignes).
+- **En-têtes de sécurité** : CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` et HSTS sur toutes les
+  réponses (`src/lib/security-headers.ts`).
 
 ## Import CSV des participants externes
 

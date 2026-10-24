@@ -2,7 +2,7 @@ import "server-only";
 import { Document, Image, Page, renderToBuffer, Text, View } from "@react-pdf/renderer";
 import { formatDate, formatTime, formatWeekday } from "@/lib/dates";
 import { MODALITY_LABELS } from "@/lib/labels";
-import { attended as attendedSlot } from "@/server/domain/attendance-proof";
+import { attended as attendedSlot, signedHours } from "@/server/domain/attendance-proof";
 import { ACTION_NATURE } from "@/server/domain/compliance";
 import { formatDecimal } from "@/server/domain/numbers";
 import { totalHours } from "@/server/domain/slots";
@@ -233,6 +233,101 @@ export async function renderCertificate(documents: SessionDocuments, enrollment:
           <Text>
             Fait {organization.city ? `à ${organization.city}, ` : ""}le {formatDate(last?.endsAt ?? new Date())}
           </Text>
+          {organization.managerSignature ? (
+            <Image style={styles.signature} src={signatureSource(organization.managerSignature)} />
+          ) : (
+            <View style={{ height: 50 }} />
+          )}
+          <Text>{signatory || organization.name}</Text>
+        </View>
+        <OrgFooter organization={organization} />
+      </Page>
+    </Document>,
+  );
+}
+
+/** Hours actually signed by the trainee (B6): slots with a signature, not corrected to an absence. */
+export function completionHours(documents: SessionDocuments, enrollment: Enrollment): number {
+  return signedHours(
+    documents.session.slots.map((slot) => ({
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+      attendance: documents.cells.get(`${enrollment.id}:${slot.id}`) ?? {
+        state: "unknown",
+        signed: false,
+        corrected: false,
+      },
+    })),
+  );
+}
+
+const ACTION_KINDS = [
+  { label: "action de formation", checked: true },
+  { label: "bilan de compétences", checked: false },
+  { label: "action de VAE", checked: false },
+  { label: "action de formation par apprentissage", checked: false },
+];
+
+/**
+ * Certificate of completion (certificat de réalisation, B6), following the
+ * model of the French Ministry of Labour: only signed hours are counted.
+ */
+export async function renderCompletionCertificate(
+  documents: SessionDocuments,
+  enrollment: Enrollment,
+): Promise<Buffer> {
+  const { session, organization } = documents;
+  const first = session.slots[0];
+  const last = session.slots.at(-1);
+  const signatory = [organization.managerName, organization.managerTitle].filter(Boolean).join(", ");
+  const { participant } = enrollment;
+
+  return renderToBuffer(
+    <Document title={`Certificat de réalisation ${session.reference}`} author={organization.name} language="fr">
+      <Page size="A4" style={styles.page}>
+        <OrgHeader organization={organization} />
+        <Text style={styles.title}>Certificat de réalisation</Text>
+        <Text>
+          Je soussigné(e) {signatory || "le représentant légal"}, représentant légal du dispensateur de l&apos;action
+          concourant au développement des compétences {organization.name}
+          {organization.activityDeclarationNumber
+            ? ` (déclaration d'activité n° ${organization.activityDeclarationNumber})`
+            : ""}
+          , atteste que :
+        </Text>
+        <Text style={{ ...styles.bold, fontSize: 13, marginVertical: 12, textAlign: "center" }}>
+          {participant.firstName} {participant.lastName}
+        </Text>
+        <Text>
+          {participant.company ? `salarié(e) de l'entreprise ${participant.company.name}, ` : ""}a suivi l&apos;action :
+        </Text>
+        <Text style={{ ...styles.bold, fontSize: 12, marginVertical: 8, textAlign: "center" }}>
+          {session.training.title}
+        </Text>
+        <Text style={{ marginBottom: 4 }}>Nature de l&apos;action concourant au développement des compétences :</Text>
+        {ACTION_KINDS.map((kind) => (
+          <Text key={kind.label} style={{ marginLeft: 12 }}>
+            {kind.checked ? "[X]" : "[  ]"} {kind.label}
+          </Text>
+        ))}
+        <Text style={{ marginTop: 8 }}>
+          qui s&apos;est déroulée{" "}
+          {first && last ? `du ${formatDate(first.startsAt)} au ${formatDate(last.endsAt)}` : ""} ({session.reference},{" "}
+          {MODALITY_LABELS[session.training.modality].toLowerCase()}), pour une durée réalisée de{" "}
+          <Text style={styles.bold}>{formatDecimal(completionHours(documents, enrollment))} heures</Text> (heures
+          émargées) sur {formatDecimal(totalHours(session.slots))} heures prévues.
+        </Text>
+        <Text style={{ marginTop: 12, fontSize: 9 }}>
+          Sans préjudice des délais imposés par les règles fixées par le financeur pour la transmission des pièces
+          justificatives, le bénéficiaire et son employeur s&apos;engagent à conserver ce certificat pendant 3 ans à
+          compter de la fin de l&apos;année du dernier paiement. En cas de contrôle, des pièces complémentaires pourront
+          être demandées.
+        </Text>
+        <View style={{ marginTop: 32, alignSelf: "flex-end", alignItems: "center", width: 240 }}>
+          <Text>
+            Fait {organization.city ? `à ${organization.city}, ` : ""}le {formatDate(last?.endsAt ?? new Date())}
+          </Text>
+          <Text style={{ fontSize: 9, marginTop: 2 }}>Cachet et signature du responsable du dispensateur</Text>
           {organization.managerSignature ? (
             <Image style={styles.signature} src={signatureSource(organization.managerSignature)} />
           ) : (

@@ -63,7 +63,18 @@ by lot (section 11) and stops at the end of each lot for validation.
 - Every migration ships a `down.sql` next to its `migration.sql` (reversible, never deletes existing records).
 - Front enrollment rules (visibility, deadline, unenrollment) are in `src/server/domain/front-enrollment.ts`; overlapping
   sessions are blocking on the front and only a warning in the BO.
-- GDPR: `src/server/services/privacy.ts` (export, anonymization keeping proofs, retention period).
+- GDPR: `src/server/services/privacy.ts` (export, anonymization keeping proofs). Retention rules are pure in
+  `src/server/domain/privacy.ts` (`RetentionPolicy`: externals after their last training, internals after
+  `User.leftAt`, technical traces, expired tokens); a legal hold (`legalHoldAt` on sessions and participants) blocks
+  every purge.
+- Legal texts (short notice, privacy policy, legal notice) are models in `src/server/domain/legal.ts`, overridden by the
+  settings; public pages `/confidentialite`, `/mentions-legales`, `/reglement-interieur` (versioned
+  `InternalRegulation`) are rendered per request (`await connection()`): a page without request-time API is
+  prerendered at build time.
+- Prior information (`src/server/services/pre-information.ts`) and every email record the SHA-256 (and version) of
+  their attachments in `documents.attachments`. Certificates of completion count signed hours only.
+- Every CSV export goes through `csvResponse()` with an audit trace (G2); admin downloads of nominative files are
+  audited in `/fichiers`. Security headers: `src/lib/security-headers.ts` (applied in `next.config.ts`).
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by
   `src/server/services/automation.ts` (cron `/api/cron`, protected by `CRON_SECRET`). Every automatic email has a
   `dedupKey` (unique on `documents`), claimed before sending, so the job can run hourly or daily and twice safely.

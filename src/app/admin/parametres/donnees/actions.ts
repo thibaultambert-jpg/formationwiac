@@ -2,48 +2,52 @@
 
 import { refresh } from "next/cache";
 import { db } from "@/lib/db";
-import { audit } from "@/server/audit";
+import { audit, diff } from "@/server/audit";
 import { requireRole } from "@/server/auth/guards";
+import { validRetentionPolicy, type RetentionPolicy } from "@/server/domain/privacy";
 import { errorState, text, type ActionState } from "@/server/forms";
 import {
   anonymizeParticipant,
+  currentRetentionPolicy,
+  LegalHoldError,
   participantsPastRetention,
   PrivacyError,
   purgeProofFiles,
+  purgeTechnicalData,
+  setLegalHold,
 } from "@/server/services/privacy";
 
 export async function saveRetention(_state: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireRole(["admin"]);
-  const years = Number(text(formData, "dataRetentionYears"));
-  if (!Number.isInteger(years) || years < 1 || years > 30) {
-    return errorState(formData, "Durée invalide.", { dataRetentionYears: "Entre 1 et 30 ans." });
-  }
+  const policy: RetentionPolicy = {
+    externalYears: Number(text(formData, "externalYears")),
+    internalYears: Number(text(formData, "internalYears")),
+    technicalMonths: Number(text(formData, "technicalMonths")),
+    tokenDays: Number(text(formData, "tokenDays")),
+  };
+  const errors = validRetentionPolicy(policy);
+  if (Object.keys(errors).length > 0) return errorState(formData, "Durées invalides.", errors);
+  const data = {
+    dataRetentionYears: policy.externalYears,
+    internalRetentionYears: policy.internalYears,
+    technicalRetentionMonths: policy.technicalMonths,
+    tokenRetentionDays: policy.tokenDays,
+  };
   const existing = await db.organizationSettings.findUnique({ where: { id: 1 } });
   await db.organizationSettings.upsert({
     where: { id: 1 },
-    update: { dataRetentionYears: years },
-    create: { id: 1, name: "Organisme de formation", dataRetentionYears: years },
+    update: data,
+    create: { id: 1, name: "Organisme de formation", ...data },
   });
-  await audit(db, {
-    userId: actor.id,
-    action: "update",
-    entity: "settings",
-    entityId: "1",
-    before: { dataRetentionYears: existing?.dataRetentionYears ?? null },
-    after: { dataRetentionYears: years },
-  });
+  const changes = existing ? diff(existing, data) : { before: null, after: data };
+  if (changes) await audit(db, { userId: actor.id, action: "update", entity: "settings", entityId: "1", ...changes });
   refresh();
-  return { status: "success", message: "Durée de conservation enregistrée." };
-}
-
-async function retentionYears(): Promise<number> {
-  const settings = await db.organizationSettings.findUnique({ where: { id: 1 }, select: { dataRetentionYears: true } });
-  return settings?.dataRetentionYears ?? 5;
+  return { status: "success", message: "Durées de conservation enregistrées." };
 }
 
 export async function anonymizeExpired(_state: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireRole(["admin"]);
-  const participants = await participantsPastRetention(new Date(), await retentionYears());
+  const participants = await participantsPastRetention(new Date(), await currentRetentionPolicy());
   let done = 0;
   const skipped: string[] = [];
   for (const participant of participants) {
@@ -66,7 +70,38 @@ export async function anonymizeExpired(_state: ActionState, formData: FormData):
 
 export async function purgeExpiredProofs(): Promise<ActionState> {
   const actor = await requireRole(["admin"]);
-  const count = await purgeProofFiles(new Date(), await retentionYears(), actor.id);
+  const count = await purgeProofFiles(new Date(), await currentRetentionPolicy(), actor.id);
   refresh();
   return { status: "success", message: `${count} fichier(s) de preuve supprimé(s).` };
+}
+
+export async function purgeTechnicalNow(): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const counts = await purgeTechnicalData(new Date(), await currentRetentionPolicy(), actor.id);
+  refresh();
+  return {
+    status: "success",
+    message: `${counts.technical} trace(s) technique(s) effacée(s), ${counts.tokens} lien(s) expiré(s) supprimé(s).`,
+  };
+}
+
+export async function legalHoldAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const kind = text(formData, "kind");
+  const id = text(formData, "id");
+  if ((kind !== "session" && kind !== "participant") || !id) return errorState(formData, "Requête invalide.");
+  const release = text(formData, "release") === "1";
+  const reason = text(formData, "reason");
+  if (!release && !reason) return errorState(formData, "Indiquez le motif.", { reason: "Le motif est obligatoire." });
+  try {
+    await setLegalHold({ kind, id }, release ? null : reason, actor.id);
+  } catch (error) {
+    if (error instanceof LegalHoldError) return errorState(formData, error.message);
+    throw error;
+  }
+  refresh();
+  return {
+    status: "success",
+    message: release ? "Conservation légale levée." : "Conservation légale placée : aucune purge ne s'applique.",
+  };
 }

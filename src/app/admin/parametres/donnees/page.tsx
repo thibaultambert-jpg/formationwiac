@@ -4,20 +4,32 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/dates";
 import { requireRole } from "@/server/auth/guards";
 import { retentionCutoff } from "@/server/domain/privacy";
-import { participantsPastRetention, proofFilesPastRetention } from "@/server/services/privacy";
-import { AnonymizeExpiredForm, PurgeProofsForm, RetentionForm } from "./forms";
+import { currentRetentionPolicy, participantsPastRetention, proofFilesPastRetention } from "@/server/services/privacy";
+import { AnonymizeExpiredForm, PurgeProofsForm, PurgeTechnicalForm, RetentionForm } from "./forms";
 
 export const metadata: Metadata = { title: "Données personnelles" };
 
 export default async function PersonalDataPage() {
   await requireRole(["admin"]);
-  const settings = await db.organizationSettings.findUnique({ where: { id: 1 }, select: { dataRetentionYears: true } });
-  const years = settings?.dataRetentionYears ?? 5;
+  const policy = await currentRetentionPolicy();
   const now = new Date();
-  const [expired, proofs] = await Promise.all([
-    participantsPastRetention(now, years),
-    proofFilesPastRetention(now, years),
+  const [expired, proofs, held] = await Promise.all([
+    participantsPastRetention(now, policy),
+    proofFilesPastRetention(now, policy),
+    Promise.all([
+      db.trainingSession.findMany({
+        where: { legalHoldAt: { not: null } },
+        select: { id: true, reference: true, legalHoldReason: true, legalHoldAt: true },
+        orderBy: { legalHoldAt: "desc" },
+      }),
+      db.participant.findMany({
+        where: { legalHoldAt: { not: null } },
+        select: { id: true, firstName: true, lastName: true, legalHoldReason: true, legalHoldAt: true },
+        orderBy: { legalHoldAt: "desc" },
+      }),
+    ]),
   ]);
+  const [heldSessions, heldParticipants] = held;
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -26,10 +38,13 @@ export default async function PersonalDataPage() {
           Durée de conservation
         </h2>
         <p className="text-muted-foreground text-sm">
-          Les preuves de formation (inscriptions, émargements, évaluations, attestations) sont conservées pendant cette
-          durée après la fin de la formation, puis les participants sont anonymisés et les fichiers de preuve supprimés.
+          Les preuves de formation (inscriptions, émargements, évaluations, attestations) des externes sont conservées
+          après leur dernière formation ; celles des internes après leur départ (date de départ saisie sur le compte
+          utilisateur). Ensuite les participants sont anonymisés et les fichiers de preuve supprimés. Les traces
+          techniques des signatures et les liens expirés sont purgés plus tôt. La tâche planifiée applique ces règles
+          chaque jour ; une conservation légale (contrôle, litige) les suspend.
         </p>
-        <RetentionForm years={years} />
+        <RetentionForm policy={policy} />
       </section>
 
       <section aria-labelledby="expired-title" className="space-y-3">
@@ -37,7 +52,9 @@ export default async function PersonalDataPage() {
           Participants à anonymiser
         </h2>
         <p className="text-muted-foreground text-sm">
-          Dernière formation (ou création, sans formation) avant le {formatDate(retentionCutoff(now, years))}.
+          Externes dont la dernière formation (ou la création, sans formation) est antérieure au{" "}
+          {formatDate(retentionCutoff(now, policy.externalYears))} ; internes partis depuis plus de{" "}
+          {policy.internalYears} an(s).
         </p>
         {expired.length === 0 ? (
           <p className="text-sm">Aucun participant n&apos;a dépassé la durée de conservation.</p>
@@ -68,12 +85,60 @@ export default async function PersonalDataPage() {
           Fichiers de preuve expirés
         </h2>
         <p className="text-muted-foreground text-sm">
-          Signatures et documents générés des sessions terminées avant cette date.
+          Signatures et documents générés des sessions terminées avant le{" "}
+          {formatDate(retentionCutoff(now, policy.externalYears))} dont tous les participants sont anonymisés.
         </p>
         {proofs.count === 0 ? (
           <p className="text-sm">Aucun fichier à supprimer.</p>
         ) : (
           <PurgeProofsForm count={proofs.count} />
+        )}
+      </section>
+
+      <section aria-labelledby="technical-title" className="space-y-3">
+        <h2 id="technical-title" className="text-lg font-semibold">
+          Traces techniques et liens expirés
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Adresses IP et navigateurs des signatures de plus de {policy.technicalMonths} mois (l&apos;empreinte des
+          émargements ne les inclut pas), liens expirés depuis plus de {policy.tokenDays} jour(s).
+        </p>
+        <PurgeTechnicalForm />
+      </section>
+
+      <section aria-labelledby="hold-title" className="space-y-3">
+        <h2 id="hold-title" className="text-lg font-semibold">
+          Conservations légales en cours
+        </h2>
+        {heldSessions.length + heldParticipants.length === 0 ? (
+          <p className="text-sm">
+            Aucune. Une conservation se place depuis la fiche d&apos;une session ou d&apos;un participant.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-md border text-sm">
+            {heldSessions.map((session) => (
+              <li key={session.id} className="p-2">
+                <Link href={`/admin/sessions/${session.id}/conformite`} className="hover:underline">
+                  Session {session.reference}
+                </Link>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · depuis le {formatDate(session.legalHoldAt!)} · {session.legalHoldReason}
+                </span>
+              </li>
+            ))}
+            {heldParticipants.map((participant) => (
+              <li key={participant.id} className="p-2">
+                <Link href={`/admin/entreprises/participants/${participant.id}`} className="hover:underline">
+                  {participant.firstName} {participant.lastName}
+                </Link>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · depuis le {formatDate(participant.legalHoldAt!)} · {participant.legalHoldReason}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

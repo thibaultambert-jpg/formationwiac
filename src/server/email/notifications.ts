@@ -8,6 +8,7 @@ import { DEFAULT_EMAIL_TEMPLATES } from "@/server/email/default-templates";
 import { buildIcs } from "@/server/email/ics";
 import { sendEmail } from "@/server/email/send";
 import { renderTemplate, type TemplateVariables } from "@/server/email/template";
+import { EMPTY_LEGAL, privacyNoticeText } from "@/server/domain/legal";
 
 export type EnrollmentNotice = "confirmation" | "waitlist" | "promotion";
 
@@ -41,7 +42,15 @@ function slotLines(session: SessionForEmail): string {
 }
 
 export async function sessionVariables(session: SessionForEmail): Promise<TemplateVariables> {
-  const organization = await db.organizationSettings.findUnique({ where: { id: 1 }, select: { name: true } });
+  const organization = await db.organizationSettings.findUnique({ where: { id: 1 } });
+  const appUrl = getEnv().APP_URL.replace(/\/$/, "");
+  const referent = [
+    organization?.disabilityReferentName,
+    organization?.disabilityReferentEmail,
+    organization?.disabilityReferentPhone,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return {
     formation: session.training.title,
     reference: session.reference,
@@ -51,7 +60,12 @@ export async function sessionVariables(session: SessionForEmail): Promise<Templa
     acces: session.accessInfo ?? "—",
     a_prevoir: session.training.thingsToBring ?? "—",
     organisme: organization?.name ?? "",
-    lien_espace: `${getEnv().APP_URL.replace(/\/$/, "")}/mes-formations`,
+    lien_espace: `${appUrl}/mes-formations`,
+    lien_reglement: `${appUrl}/reglement-interieur`,
+    mention_rgpd: privacyNoticeText(organization ?? { ...EMPTY_LEGAL, name: "" }),
+    referent_handicap: referent || "—",
+    referent_pedagogique: organization?.pedagogicalContact ?? "—",
+    referent_administratif: organization?.administrativeContact ?? organization?.contactEmail ?? "—",
   };
 }
 
@@ -178,6 +192,11 @@ export function scheduleEnrollmentNotices(notices: { enrollmentId: string; notic
     for (const { enrollmentId, notice } of notices) {
       try {
         await notifyEnrollment(enrollmentId, notice);
+        if (notice !== "waitlist") {
+          // Dynamic import: the prior information module imports this one.
+          const { sendPreInformationAfterEnrollment } = await import("@/server/services/pre-information");
+          await sendPreInformationAfterEnrollment(enrollmentId);
+        }
       } catch (error) {
         console.error("Enrollment notice failed", enrollmentId, error);
       }

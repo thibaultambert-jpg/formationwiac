@@ -9,7 +9,12 @@ import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/dates";
 import { requireRole } from "@/server/auth/guards";
 import { EMAIL_DOCUMENT_TYPES } from "@/server/email/default-templates";
-import { sendAttendanceLinksAction, sendCertificatesAction, sendConvocationsAction } from "./actions";
+import {
+  sendAttendanceLinksAction,
+  sendCertificatesAction,
+  sendConvocationsAction,
+  sendPreInformationAction,
+} from "./actions";
 
 export const metadata: Metadata = { title: "Documents" };
 
@@ -17,6 +22,7 @@ const PDF_LABELS: Record<string, string> = {
   convocation: "Convocation",
   attendance_sheet: "Feuille d'émargement",
   certificate: "Attestation",
+  completion_certificate: "Certificat de réalisation",
 };
 
 export default async function SessionDocumentsPage({ params }: PageProps<"/admin/sessions/[id]/documents">) {
@@ -33,7 +39,7 @@ export default async function SessionDocumentsPage({ params }: PageProps<"/admin
     db.document.findMany({
       where: {
         sessionId: id,
-        type: { in: ["convocation", "attendance_sheet", "certificate"] },
+        type: { in: ["convocation", "attendance_sheet", "certificate", "completion_certificate"] },
         filePath: { endsWith: ".pdf" },
       },
       include: { enrollment: { include: { participant: true } } },
@@ -51,6 +57,14 @@ export default async function SessionDocumentsPage({ params }: PageProps<"/admin
           Actions groupées
         </h2>
         <div className="flex flex-wrap items-start gap-3">
+          {active ? (
+            <ActionButton
+              action={sendPreInformationAction}
+              hidden={{ sessionId: id }}
+              label="Envoyer l'information préalable"
+              variant="outline"
+            />
+          ) : null}
           {active ? (
             <ActionButton action={sendConvocationsAction} hidden={{ sessionId: id }} label="Envoyer les convocations" />
           ) : null}
@@ -78,8 +92,11 @@ export default async function SessionDocumentsPage({ params }: PageProps<"/admin
           </Button>
         </div>
         <p className="text-muted-foreground text-sm">
-          Le ZIP contient la feuille d&apos;émargement signée, les attestations des participants présents et les
-          évaluations (réponses et synthèse). Les attestations sont envoyées automatiquement à la clôture de la session.
+          Le ZIP contient la feuille d&apos;émargement signée, les attestations des participants présents, les
+          certificats de réalisation et les évaluations (réponses et synthèse). Les attestations sont envoyées
+          automatiquement à la clôture de la session, avec le certificat de réalisation (heures émargées) pour les
+          externes et les financements publics. L&apos;information préalable part à l&apos;inscription ; le bouton
+          l&apos;envoie aux inscrits qui ne l&apos;ont pas encore reçue.
         </p>
       </section>
 

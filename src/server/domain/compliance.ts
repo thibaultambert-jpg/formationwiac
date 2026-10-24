@@ -58,12 +58,19 @@ export type RequirementInput = {
   inScope: boolean;
   conventionSigned: boolean;
   agreementWaived: boolean;
+  /** The prior information email (B3) was sent. */
+  preInformationSent: boolean;
 };
 
 /** Obligations of one enrollment, used by the session compliance panel. */
+/** Prior information is due for every trainee; blocking for externals and in the Qualiopi scope (B3). */
+export function preInformationRequired(participantType: ParticipantTypeValue, inScope: boolean): boolean {
+  return participantType === "external" || inScope;
+}
+
 export function requirementsFor(input: RequirementInput): Requirement[] {
   const external = input.participantType === "external";
-  const blocking = external || input.inScope;
+  const blocking = preInformationRequired(input.participantType, input.inScope);
   const requirements: Requirement[] = [];
   if (external) {
     requirements.push({
@@ -73,6 +80,12 @@ export function requirementsFor(input: RequirementInput): Requirement[] {
       satisfied: input.conventionSigned || input.agreementWaived,
     });
   }
+  requirements.push({
+    key: "pre_information",
+    label: "Information préalable envoyée (programme, règlement intérieur, contacts)",
+    blocking: true,
+    satisfied: input.preInformationSent,
+  });
   return requirements.map((requirement) => ({ ...requirement, blocking: requirement.blocking && blocking }));
 }
 

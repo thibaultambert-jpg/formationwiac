@@ -79,6 +79,13 @@ describe("decideAccess", () => {
     expect(decideAccess("/emargements", null)).toBe("login");
   });
 
+  it("publishes the legal pages without login (F1, F2, F3)", () => {
+    expect(decideAccess("/confidentialite", null)).toBe("allow");
+    expect(decideAccess("/mentions-legales", null)).toBe("allow");
+    expect(decideAccess("/reglement-interieur", null)).toBe("allow");
+    expect(decideAccess("/reglement-interieur/fichier", null)).toBe("allow");
+  });
+
   it("sends anonymous visitors to the login page", () => {
     expect(decideAccess("/", null)).toBe("login");
     expect(decideAccess("/mes-formations", null)).toBe("login");

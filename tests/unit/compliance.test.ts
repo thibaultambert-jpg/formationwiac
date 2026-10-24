@@ -63,14 +63,32 @@ describe("conditional requirements (A3)", () => {
       inScope: false,
       conventionSigned: false,
       agreementWaived: false,
+      preInformationSent: false,
     });
     expect(agreement).toMatchObject({ key: "agreement", blocking: true, satisfied: false });
   });
 
   it("has no agreement requirement for internal trainees", () => {
-    expect(
-      requirementsFor({ participantType: "internal", inScope: true, conventionSigned: false, agreementWaived: false }),
-    ).toEqual([]);
+    const keys = requirementsFor({
+      participantType: "internal",
+      inScope: true,
+      conventionSigned: false,
+      agreementWaived: false,
+      preInformationSent: false,
+    }).map((requirement) => requirement.key);
+    expect(keys).not.toContain("agreement");
+  });
+
+  it("requires the prior information, blocking for externals and in scope only (B3)", () => {
+    const input = { conventionSigned: true, agreementWaived: false, preInformationSent: false };
+    const find = (participantType: "internal" | "external", inScope: boolean, sent = false) =>
+      requirementsFor({ ...input, participantType, inScope, preInformationSent: sent }).find(
+        (requirement) => requirement.key === "pre_information",
+      );
+    expect(find("external", false)).toMatchObject({ blocking: true, satisfied: false });
+    expect(find("internal", true)).toMatchObject({ blocking: true });
+    expect(find("internal", false)).toMatchObject({ blocking: false });
+    expect(find("external", false, true)).toMatchObject({ satisfied: true });
   });
 });
 

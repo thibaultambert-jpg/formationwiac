@@ -118,8 +118,10 @@ enum DocumentType {
   convention
   attendance_sheet
   certificate
+  completion_certificate
   program
   // Emails
+  pre_training_information
   enrollment_confirmation
   waitlist_notice
   waitlist_promotion
@@ -141,6 +143,8 @@ model User {
   role        UserRole  @default(employee)
   department  String?
   active      Boolean   @default(true)
+  // End of the employment relationship (retention of internal training data, E5).
+  leftAt      DateTime? @map("left_at") @db.Timestamptz
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
@@ -170,22 +174,27 @@ model Theme {
 }
 
 model Training {
-  id             String           @id @default(uuid(7)) @db.Uuid
-  title          String
-  slug           String           @unique
-  themeId        String?          @map("theme_id") @db.Uuid
-  objectives     String           @db.Text
-  prerequisites  String?          @db.Text
-  targetAudience String?          @map("target_audience") @db.Text
-  programText    String?          @map("program_text") @db.Text
-  programPdfPath String?          @map("program_pdf_path")
-  durationHours  Decimal          @map("duration_hours") @db.Decimal(5, 1)
-  modality       TrainingModality
-  priceExclTax   Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
-  thingsToBring  String?          @map("things_to_bring") @db.Text
-  active         Boolean          @default(true)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  id                String           @id @default(uuid(7)) @db.Uuid
+  title             String
+  slug              String           @unique
+  themeId           String?          @map("theme_id") @db.Uuid
+  objectives        String           @db.Text
+  prerequisites     String?          @db.Text
+  targetAudience    String?          @map("target_audience") @db.Text
+  programText       String?          @map("program_text") @db.Text
+  programPdfPath    String?          @map("program_pdf_path")
+  durationHours     Decimal          @map("duration_hours") @db.Decimal(5, 1)
+  modality          TrainingModality
+  priceExclTax      Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
+  thingsToBring     String?          @map("things_to_bring") @db.Text
+  // Public information (Qualiopi indicators 1 and 2, prior information B3).
+  accessDelay       String?          @map("access_delay") @db.Text
+  teachingMethods   String?          @map("teaching_methods") @db.Text
+  evaluationMethods String?          @map("evaluation_methods") @db.Text
+  accessibility     String?          @db.Text
+  active            Boolean          @default(true)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   theme    Theme?            @relation(fields: [themeId], references: [id])
   sessions TrainingSession[]
@@ -239,6 +248,9 @@ model TrainingSession {
   internalNotes        String?       @map("internal_notes") @db.Text
   cancelledAt          DateTime?     @map("cancelled_at") @db.Timestamptz
   cancellationReason   String?       @map("cancellation_reason")
+  // Legal hold (funder audit, litigation): blocks every retention purge (E5).
+  legalHoldReason      String?       @map("legal_hold_reason")
+  legalHoldAt          DateTime?     @map("legal_hold_at") @db.Timestamptz
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -326,6 +338,8 @@ model Participant {
   hubspotContactId String?         @unique @map("hubspot_contact_id")
   archivedAt       DateTime?       @map("archived_at") @db.Timestamptz
   anonymizedAt     DateTime?       @map("anonymized_at") @db.Timestamptz
+  legalHoldReason  String?         @map("legal_hold_reason")
+  legalHoldAt      DateTime?       @map("legal_hold_at") @db.Timestamptz
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -563,6 +577,8 @@ model Document {
   error          String?
   // SHA-256 of the stored file: frozen documents can be verified (C7, I2).
   sha256         String?      @map("sha256")
+  // Versions of the documents attached to an email: [{ kind, name, sha256, version? }] (B3).
+  attachments    Json?
   // Idempotency key of automatic sends (e.g. "reminder:<enrollmentId>").
   dedupKey       String?      @unique @map("dedup_key")
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
@@ -611,13 +627,44 @@ model OrganizationSettings {
   reminderDaysBefore        Int      @default(3) @map("reminder_days_before")
   coldEvaluationDays        Int      @default(60) @map("cold_evaluation_days")
   evaluationReminderDays    Int      @default(5) @map("evaluation_reminder_days")
+  // Retention (E5): externals after the end of their last session; internals
+  // after leaving; technical attendance data; expired links.
   dataRetentionYears        Int      @default(5) @map("data_retention_years")
+  internalRetentionYears    Int      @default(5) @map("internal_retention_years")
+  technicalRetentionMonths  Int      @default(12) @map("technical_retention_months")
+  tokenRetentionDays        Int      @default(7) @map("token_retention_days")
+  // Contacts shown in the prior information and the convocations (B3, D8).
+  disabilityReferentName    String?  @map("disability_referent_name")
+  disabilityReferentEmail   String?  @map("disability_referent_email")
+  disabilityReferentPhone   String?  @map("disability_referent_phone")
+  pedagogicalContact        String?  @map("pedagogical_contact")
+  administrativeContact     String?  @map("administrative_contact")
+  // Legal texts (E2, F1, F2), editable in the settings.
+  dpoContact                String?  @map("dpo_contact")
+  privacyNotice             String?  @map("privacy_notice") @db.Text
+  privacyPolicy             String?  @map("privacy_policy") @db.Text
+  legalNotice               String?  @map("legal_notice") @db.Text
   // Personal attendance links: usable from N minutes before the slot until N minutes after its end.
   attendanceMarginBefore    Int      @default(30) @map("attendance_margin_before")
   attendanceMarginAfter     Int      @default(60) @map("attendance_margin_after")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("organization_settings")
+}
+
+// Internal regulations (règlement intérieur), versioned and dated (F3): a new
+// upload adds a version, the latest one in force is sent with the prior
+// information.
+model InternalRegulation {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  version       Int      @unique
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz
+  filePath      String   @map("file_path")
+  sha256        String
+  createdById   String?  @map("created_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("internal_regulations")
 }
 
 // One editable template per email type ({{prenom}}, {{formation}}, …).

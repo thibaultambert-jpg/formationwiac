@@ -15,6 +15,10 @@ export type TrainingFormValues = {
   targetAudience: string | null;
   programText: string | null;
   thingsToBring: string | null;
+  accessDelay: string | null;
+  teachingMethods: string | null;
+  evaluationMethods: string | null;
+  accessibility: string | null;
   programPdfPath: string | null;
   durationHours: string;
   modality: string;
@@ -90,6 +94,32 @@ export function TrainingForm({
         hint="Repris dans la convocation (ordinateur, pièce d'identité, supports…)."
         defaultValue={training?.thingsToBring}
       />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextareaField
+          name="teachingMethods"
+          label="Méthodes pédagogiques"
+          hint="Repris dans l'information préalable."
+          defaultValue={training?.teachingMethods}
+        />
+        <TextareaField
+          name="evaluationMethods"
+          label="Modalités d'évaluation"
+          hint="Évaluation des acquis, quiz, mise en situation…"
+          defaultValue={training?.evaluationMethods}
+        />
+        <TextareaField
+          name="accessDelay"
+          label="Délai d'accès"
+          hint="Par exemple : inscription jusqu'à 7 jours avant la session."
+          defaultValue={training?.accessDelay}
+        />
+        <TextareaField
+          name="accessibility"
+          label="Accessibilité et adaptations"
+          hint="Accès des personnes en situation de handicap, adaptations possibles."
+          defaultValue={training?.accessibility}
+        />
+      </div>
       <FileField
         name="programPdf"
         label={training?.programPdfPath ? "Remplacer le programme PDF" : "Programme PDF"}

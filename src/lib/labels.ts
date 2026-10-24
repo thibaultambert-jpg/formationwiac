@@ -74,11 +74,15 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   role_change: "Changement de rôle",
   upload: "Téléversement",
   anonymize: "Anonymisation",
-  export: "Export des données",
-  purge: "Purge des preuves",
+  export: "Export",
+  purge: "Purge",
   automation: "Tâches automatiques",
   send: "Envoi",
   sign: "Émargement",
+  download: "Téléchargement",
+  legal_hold: "Conservation légale",
+  legal_hold_release: "Levée de conservation légale",
+  waive_agreement: "Dérogation",
 };
 
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {
@@ -91,6 +95,10 @@ export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   participant: "Participant",
   enrollment: "Inscription",
   settings: "Paramètres",
+  bpf: "BPF",
+  file: "Fichier",
+  internal_regulation: "Règlement intérieur",
+  convention: "Convention",
 };
 
 export const FUNDING_TYPE_LABELS = {

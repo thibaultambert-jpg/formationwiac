@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 
 // RFC 2822 / MIME message builder for the Gmail API (raw messages).
 
-export type MailAttachment = { filename: string; contentType: string; content: Buffer | string };
+export type MailAttachment = {
+  filename: string;
+  contentType: string;
+  content: Buffer | string;
+  /** Kind and version of a versioned document (program, internal regulations), traced with the email (B3). */
+  trace?: { kind: string; version?: string };
+};
 
 export type MailMessage = {
   from: { name?: string; email: string };

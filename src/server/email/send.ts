@@ -2,6 +2,7 @@ import "server-only";
 import type { DocumentType } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { sha256 } from "@/server/domain/attendance-proof";
 import { sendWithGmail } from "@/server/email/gmail";
 import { buildMime, type MailAttachment } from "@/server/email/mime";
 import { textToHtml } from "@/server/email/template";
@@ -32,6 +33,15 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002";
 }
 
+/** Name, fingerprint and version of each attachment, kept with the email (B3, D4). */
+export function attachmentTrace(attachments: readonly MailAttachment[]) {
+  return attachments.map((attachment) => ({
+    name: attachment.filename,
+    sha256: sha256(attachment.content),
+    ...(attachment.trace ? { kind: attachment.trace.kind, version: attachment.trace.version ?? null } : {}),
+  }));
+}
+
 /**
  * Sends one email and traces it in `documents` (section 8). Never throws:
  * failures are recorded with their error so that enrollments are not blocked.
@@ -48,6 +58,7 @@ export async function sendEmail(
     subject: email.subject,
     sessionId: email.sessionId ?? null,
     enrollmentId: email.enrollmentId ?? null,
+    ...(email.attachments?.length ? { attachments: attachmentTrace(email.attachments) } : {}),
   };
 
   let documentId: string;

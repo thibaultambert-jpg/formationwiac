@@ -7,6 +7,7 @@ const SETTINGS_TABS = [
   { href: "/admin/parametres/emails", label: "Emails" },
   { href: "/admin/parametres/evaluations", label: "Évaluations et rappels" },
   { href: "/admin/parametres/donnees", label: "Données personnelles" },
+  { href: "/admin/parametres/informations-legales", label: "Informations légales" },
   { href: "/admin/parametres/utilisateurs", label: "Utilisateurs et rôles" },
   { href: "/admin/parametres/journal", label: "Journal d'audit" },
 ];

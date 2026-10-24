@@ -85,10 +85,10 @@ test("create a 2-day session and enroll 3 externals of a new company", async ({ 
 
   await page.getByRole("link", { name: /Inscrits/ }).click();
   await expect(page.getByRole("row").filter({ hasText: companyName }).filter({ hasText: "Confirmée" })).toHaveCount(3);
-  // The trainees are notified once their enrollment is confirmed.
+  // Prior information at enrollment (B3); the confirmation once the agreement is signed.
   await expect
     .poll(async () => (await emailsFor(`ines.${stamp}@e2e.example`)).map((email) => email.type))
-    .toEqual(["enrollment_confirmation"]);
+    .toEqual(["pre_training_information", "enrollment_confirmation"]);
 });
 
 test("the waitlist is used at capacity and promoted on cancellation", async ({ page }) => {
@@ -134,10 +134,10 @@ test("the waitlist is used at capacity and promoted on cancellation", async ({ p
   await expect(page.getByRole("row").filter({ hasText: "Un Premier" })).toContainText("Annulée");
   await expect(page.getByText("Complète", { exact: true })).toBeVisible();
 
-  // Emails: the waitlist notice; the confirmation waits for the agreement.
+  // Emails: the waitlist notice, then the prior information once promoted; the confirmation waits for the agreement.
   await expect
     .poll(async () => (await emailsFor(`trois.${stamp}@e2e.example`)).map((email) => email.type))
-    .toEqual(["waitlist_notice"]);
+    .toEqual(["waitlist_notice", "pre_training_information"]);
 
   // Cancelling the session notifies the active enrollments.
   await page.getByRole("link", { name: "Informations" }).click();
@@ -147,7 +147,7 @@ test("the waitlist is used at capacity and promoted on cancellation", async ({ p
   await expect(page.getByText(/Session annulée le/)).toBeVisible();
   await expect
     .poll(async () => (await emailsFor(`deux.${stamp}@e2e.example`)).map((email) => email.type))
-    .toEqual(["session_cancellation"]);
+    .toEqual(["pre_training_information", "session_cancellation"]);
   await page.getByRole("link", { name: "Documents" }).click();
   await page
     .getByRole("link", { name: /^Annulation :/ })

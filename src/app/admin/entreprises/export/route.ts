@@ -42,5 +42,10 @@ export async function GET() {
       formatDate(participant.createdAt),
     ]),
   );
-  return csvResponse(csv, "participants-externes");
+  return csvResponse(csv, "participants-externes", {
+    userId: user.id,
+    entity: "participant",
+    entityId: "list",
+    rows: participants.length,
+  });
 }

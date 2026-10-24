@@ -1,4 +1,12 @@
-import { Building2, CalendarDays, GraduationCap, LayoutDashboard, Settings, UserRound } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  FileBarChart,
+  GraduationCap,
+  LayoutDashboard,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import { NavLink } from "@/components/layout/nav-link";
 
 const ADMIN_NAV = [
@@ -7,6 +15,7 @@ const ADMIN_NAV = [
   { href: "/admin/sessions", label: "Sessions", icon: CalendarDays },
   { href: "/admin/formateurs", label: "Formateurs", icon: UserRound },
   { href: "/admin/entreprises", label: "Entreprises", icon: Building2 },
+  { href: "/admin/bpf", label: "Bilan (BPF)", icon: FileBarChart },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ] as const;
 

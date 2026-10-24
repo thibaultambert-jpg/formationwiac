@@ -182,4 +182,46 @@ describe("GDPR retention", async () => {
   it("builds a non-deliverable unique email", () => {
     expect(anonymizedEmail("abc")).toBe("anonyme+abc@anonymise.invalid");
   });
+
+  const { DEFAULT_RETENTION, daysBefore, monthsBefore, retentionExpired, validRetentionPolicy } =
+    await import("@/server/domain/privacy");
+  const old = new Date("2020-01-01T00:00:00Z");
+
+  it("applies the external period after the last training", () => {
+    const subject = { type: "external" as const, lastActivity: old, leftAt: null, legalHold: false };
+    expect(retentionExpired(subject, now, DEFAULT_RETENTION)).toBe(true);
+    expect(retentionExpired({ ...subject, lastActivity: new Date("2023-01-01") }, now, DEFAULT_RETENTION)).toBe(false);
+  });
+
+  it("keeps internals while employed, then counts from the later of departure and last training", () => {
+    const subject = { type: "internal" as const, lastActivity: old, leftAt: null, legalHold: false };
+    expect(retentionExpired(subject, now, DEFAULT_RETENTION)).toBe(false);
+    expect(retentionExpired({ ...subject, leftAt: new Date("2020-06-01") }, now, DEFAULT_RETENTION)).toBe(true);
+    expect(retentionExpired({ ...subject, leftAt: new Date("2023-06-01") }, now, DEFAULT_RETENTION)).toBe(false);
+    expect(
+      retentionExpired(
+        { ...subject, leftAt: new Date("2019-01-01"), lastActivity: new Date("2023-01-01") },
+        now,
+        DEFAULT_RETENTION,
+      ),
+    ).toBe(false);
+  });
+
+  it("never expires under legal hold", () => {
+    const subject = { type: "external" as const, lastActivity: old, leftAt: null, legalHold: true };
+    expect(retentionExpired(subject, now, DEFAULT_RETENTION)).toBe(false);
+  });
+
+  it("computes the technical and link cutoffs", () => {
+    expect(monthsBefore(now, 12).toISOString()).toBe("2025-10-22T10:00:00.000Z");
+    expect(daysBefore(now, 7).toISOString()).toBe("2026-10-15T10:00:00.000Z");
+  });
+
+  it("validates the durations", () => {
+    expect(validRetentionPolicy(DEFAULT_RETENTION)).toEqual({});
+    expect(validRetentionPolicy({ ...DEFAULT_RETENTION, tokenDays: 0, externalYears: 1.5 })).toEqual({
+      tokenDays: "Entre 1 et 365 jours.",
+      externalYears: "Entre 1 et 30 ans.",
+    });
+  });
 });
