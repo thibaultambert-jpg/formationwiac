@@ -50,7 +50,10 @@ export function bpfSummary(rows: readonly BpfEnrollment[], includeInternal: bool
   const kept = rows.filter((row) => row.hours > 0 && (includeInternal || row.participantType === "external"));
   return {
     total: line("total", kept),
-    subcontracted: line("subcontracted", kept.filter((row) => row.subcontracted)),
+    subcontracted: line(
+      "subcontracted",
+      kept.filter((row) => row.subcontracted),
+    ),
     byFunding: groupBy(kept, (row) => row.fundingType),
     byPublic: groupBy(kept, (row) => row.participantType),
   };

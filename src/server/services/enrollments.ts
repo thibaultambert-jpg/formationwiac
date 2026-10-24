@@ -215,7 +215,9 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
       }
       const started = await tx.sessionSlot.count({ where: { sessionId: session.id, startsAt: { lte: new Date() } } });
       if (started === 0) {
-        throw new EnrollmentError("La formation n'a pas commencé : annulez l'inscription plutôt que de déclarer un abandon.");
+        throw new EnrollmentError(
+          "La formation n'a pas commencé : annulez l'inscription plutôt que de déclarer un abandon.",
+        );
       }
     }
 
