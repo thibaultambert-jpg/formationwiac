@@ -1,7 +1,10 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { unzipSync } from "fflate";
 import { db } from "@/lib/db";
+import { storeBuffer } from "@/server/storage";
 import {
   anonymizeParticipant,
+  exportParticipantArchive,
   exportParticipantData,
   participantsPastRetention,
   PrivacyError,
@@ -90,6 +93,17 @@ describe("GDPR", () => {
     expect(data?.enrollments).toHaveLength(1);
     expect(data?.enrollments[0].documents[0].type).toBe("enrollment_confirmation");
     expect(data?.history).toHaveLength(1);
+  });
+
+  it("exports the data and the files as a ZIP (E6)", async () => {
+    const { participant, enrollment } = await externalWithEnrollment(new Date("2026-01-10T12:00:00Z"));
+    const filePath = await storeBuffer("documents/test", "pdf", Buffer.from("%PDF-1.4 test"), "application/pdf");
+    await db.document.create({ data: { type: "certificate", enrollmentId: enrollment.id, filePath } });
+    const archive = await exportParticipantArchive(participant.id);
+    const files = unzipSync(archive!.zip);
+    expect(Object.keys(files)).toContain("donnees.json");
+    expect(JSON.parse(new TextDecoder().decode(files["donnees.json"])).participant.email).toBe(participant.email);
+    expect(Object.keys(files).some((name) => name.endsWith("/documents/certificate.pdf"))).toBe(true);
   });
 
   it("anonymizes identity and keeps the enrollment as a proof", async () => {

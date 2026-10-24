@@ -223,7 +223,7 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
   Les réponses gardent le libellé des questions au moment de la réponse. L'onglet **Évaluations** de la session présente
   les moyennes, les répartitions et les verbatims, avec un export CSV.
 - **Documents** : convocation (PDF + programme, mention RGPD en fin d'email) envoyée depuis l'onglet **Documents** ;
-  attestation PDF avec la durée réellement suivie. **Télécharger les preuves (ZIP)** regroupe la feuille d'émargement
+  attestation PDF avec la durée réellement suivie. **Télécharger le dossier complet (ZIP)** regroupe la feuille d'émargement
   définitive, les attestations et certificats de réalisation tels qu'envoyés et les évaluations (réponses et synthèse).
 - **Information préalable** : envoyée automatiquement à l'inscription (et par la tâche quotidienne) aux externes et aux
   sessions du périmètre Qualiopi ; le bouton **Envoyer l'information préalable** l'envoie aux autres inscrits. Elle
@@ -260,8 +260,9 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
 
 ## Données personnelles (RGPD)
 
-- **Droit d'accès** : **Entreprises › Tous les participants**, fiche du participant, **Exporter ses données** (fichier
-  JSON : identité, compte Google, inscriptions, émargements, évaluations, emails envoyés, historique).
+- **Droit d'accès** : **Entreprises › Tous les participants**, fiche du participant, **Exporter ses données** (archive
+  ZIP : `donnees.json` avec identité, compte Google, inscriptions, émargements, évaluations, emails envoyés et
+  historique, plus les signatures, les documents envoyés et les pièces pédagogiques).
 - **Effacement** : sur la même fiche, **Anonymiser** (saisie de « ANONYMISER » pour confirmer). Le nom, l'email, le
   téléphone, la fonction, les motivations et les copies d'emails sont effacés, et les entrées du journal d'audit qui le
   concernent sont neutralisées. Les inscriptions, émargements et attestations sont conservés sans identité jusqu'à la fin

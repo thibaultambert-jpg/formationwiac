@@ -17,7 +17,9 @@ import {
   type RetentionPolicy,
 } from "@/server/domain/privacy";
 import { EMAIL_DOCUMENT_TYPES } from "@/server/email/default-templates";
-import { deleteStoredFiles } from "@/server/storage";
+import { zipSync } from "fflate";
+import { addUnique, safeFileName } from "@/server/domain/dossier";
+import { deleteStoredFiles, readStoredFile } from "@/server/storage";
 
 export class PrivacyError extends Error {}
 
@@ -387,4 +389,55 @@ export async function setLegalHold(
     before,
     after: { legalHoldReason: reason },
   });
+}
+
+/**
+ * Right of access as a ZIP (E6): the JSON of every stored datum (with the
+ * audit history), plus the files about the person: signatures, documents
+ * sent to them, pedagogical files.
+ */
+export async function exportParticipantArchive(participantId: string) {
+  const data = await exportParticipantData(participantId);
+  if (!data) return null;
+  const files: Record<string, Uint8Array> = {
+    "donnees.json": new TextEncoder().encode(JSON.stringify(data, null, 2)),
+  };
+  const enrollments = await db.enrollment.findMany({
+    where: { participantId },
+    include: {
+      session: { select: { reference: true } },
+      attendances: { include: { slot: { select: { startsAt: true } } } },
+      documents: { where: { filePath: { not: null } } },
+    },
+  });
+  const add = async (path: string, storagePath: string | null) => {
+    if (!storagePath) return;
+    const file = await readStoredFile(storagePath);
+    if (file) addUnique(files, path, new Uint8Array(file.body));
+  };
+  const extension = (path: string) => path.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  for (const enrollment of enrollments) {
+    const folder = safeFileName(enrollment.session.reference);
+    for (const attendance of enrollment.attendances) {
+      if (attendance.signaturePath)
+        await add(
+          `${folder}/signatures/${attendance.slot.startsAt.toISOString().slice(0, 16).replace(":", "h")}${extension(attendance.signaturePath)}`,
+          attendance.signaturePath,
+        );
+    }
+    for (const document of enrollment.documents) {
+      await add(
+        `${folder}/documents/${safeFileName(document.type)}${extension(document.filePath!)}`,
+        document.filePath,
+      );
+    }
+    for (const [name, path] of [
+      ["analyse-du-besoin", enrollment.needsAnalysisPath],
+      ["positionnement", enrollment.positioningPath],
+      ["evaluation-des-acquis", enrollment.learningFilePath],
+    ] as const) {
+      if (path) await add(`${folder}/pedagogie/${name}${extension(path)}`, path);
+    }
+  }
+  return { data, zip: zipSync(files, { level: 6 }), entries: Object.keys(files) };
 }
