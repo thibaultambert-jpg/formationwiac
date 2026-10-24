@@ -64,6 +64,9 @@ describe("conditional requirements (A3)", () => {
       conventionSigned: false,
       agreementWaived: false,
       preInformationSent: false,
+      needsAnalysisDone: false,
+      positioningDone: false,
+      learningAssessed: false,
     });
     expect(agreement).toMatchObject({ key: "agreement", blocking: true, satisfied: false });
   });
@@ -75,12 +78,22 @@ describe("conditional requirements (A3)", () => {
       conventionSigned: false,
       agreementWaived: false,
       preInformationSent: false,
+      needsAnalysisDone: false,
+      positioningDone: false,
+      learningAssessed: false,
     }).map((requirement) => requirement.key);
     expect(keys).not.toContain("agreement");
   });
 
   it("requires the prior information, blocking for externals and in scope only (B3)", () => {
-    const input = { conventionSigned: true, agreementWaived: false, preInformationSent: false };
+    const input = {
+      conventionSigned: true,
+      agreementWaived: false,
+      preInformationSent: false,
+      needsAnalysisDone: false,
+      positioningDone: false,
+      learningAssessed: false,
+    };
     const find = (participantType: "internal" | "external", inScope: boolean, sent = false) =>
       requirementsFor({ ...input, participantType, inScope, preInformationSent: sent }).find(
         (requirement) => requirement.key === "pre_information",
@@ -89,6 +102,31 @@ describe("conditional requirements (A3)", () => {
     expect(find("internal", true)).toMatchObject({ blocking: true });
     expect(find("internal", false)).toMatchObject({ blocking: false });
     expect(find("external", false, true)).toMatchObject({ satisfied: true });
+  });
+});
+
+describe("pedagogical requirements (D2, D3, D5)", () => {
+  const base = {
+    conventionSigned: true,
+    agreementWaived: false,
+    preInformationSent: true,
+    needsAnalysisDone: false,
+    positioningDone: false,
+    learningAssessed: false,
+  };
+  const find = (participantType: "internal" | "external", inScope: boolean, key: string) =>
+    requirementsFor({ ...base, participantType, inScope }).find((requirement) => requirement.key === key);
+
+  it("makes the needs analysis blocking like the other obligations", () => {
+    expect(find("external", false, "needs_analysis")).toMatchObject({ blocking: true, satisfied: false });
+    expect(find("internal", false, "needs_analysis")).toMatchObject({ blocking: false });
+  });
+
+  it("makes positioning and learning assessment blocking for externals of the Qualiopi scope only", () => {
+    expect(find("external", true, "positioning")).toMatchObject({ blocking: true });
+    expect(find("external", true, "learning")).toMatchObject({ blocking: true });
+    expect(find("external", false, "positioning")).toMatchObject({ blocking: false });
+    expect(find("internal", true, "learning")).toMatchObject({ blocking: false });
   });
 });
 
