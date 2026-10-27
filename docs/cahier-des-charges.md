@@ -186,7 +186,7 @@ Le développement se fait par lots ; chaque lot est livré, déployé et testé 
 | 2. BO cœur | Formations, formateurs, sessions avec créneaux, entreprises et externes, inscriptions BO, import CSV, exports | Un admin crée une session de 2 jours et y inscrit 3 externes d'une nouvelle entreprise sans quitter la fiche session |
 | 3. Front | Catalogue, fiche formation, inscription, liste d'attente, désinscription, « Mes formations », emails de confirmation | Un collaborateur s'inscrit en 3 clics ; à capacité atteinte, le suivant passe en liste d'attente et est promu à la première annulation |
 | 4. Documents et suivi | Convocations, émargement numérique, attestations PDF, évaluations, rappels automatiques, tableau de bord, journal d'audit | Pour une session terminée, le BO télécharge un ZIP contenant émargements signés, évaluations et attestations |
-| 5. Facturation Pennylane | Onglet Facturation d'une session clôturée : une facture par entreprise payeuse sur le réalisé (montant proposé : prix appliqué pour un présent ou un abandon, 0 € pour un absent ; tout ajustement exige un motif), créée en brouillon dans Pennylane par l'API v2 (client créé à la première facture), TVA réglée par formation (20 % ou exonérée avec mention légale), nouvelle tentative sans doublon, détachement motivé, filtre « À facturer » de la liste des sessions | Pour une session clôturée avec deux externes d'une même entreprise (un présent, un absent), l'admin crée en un clic un brouillon Pennylane ne facturant que le présent ; l'inscription ne peut plus être facturée une seconde fois |
+| 5. Facturation Pennylane | Onglet Facturation d'une session clôturée : une facture par entreprise payeuse sur le réalisé (montant proposé : prix appliqué au prorata des heures signées ; tout ajustement exige un motif ; part prise en charge facturée à l'OPCO en cas de subrogation ; dédit sur une ligne distincte soumise à la TVA ; CPF, France Travail et Région hors Pennylane), créée en brouillon dans Pennylane par l'API v2 (client créé à la première facture), TVA réglée par formation (20 % ou exonérée avec mention légale), nouvelle tentative sans doublon, détachement motivé, filtre « À facturer » de la liste des sessions | Pour une session clôturée avec deux externes d'une même entreprise (un présent, un absent), l'admin crée en un clic un brouillon Pennylane ne facturant que le présent ; l'inscription ne peut plus être facturée une seconde fois |
 
 ## 12. Consignes pour Claude Code et points à trancher
 
@@ -212,6 +212,8 @@ Décisions prises :
 | Outil de facturation | Pennylane, par l'API ; factures créées en brouillon (numérotées et envoyées depuis Pennylane) |
 | Moment et base de facturation | Après la clôture de la session, au réalisé, une facture par entreprise payeuse ; l'admin ajuste chaque ligne avec un motif |
 | TVA des formations | Réglée sur chaque formation : 20 % ou exonérée (mention légale réglable dans les paramètres) |
+| Financements | Subrogation OPCO au cas par cas (part prise en charge facturée à l'OPCO avec le n° d'accord, reste à charge à l'entreprise) ; CPF, France Travail et Région réglés sur leur plateforme, hors Pennylane |
+| Dédit | Facturable sur une ligne distincte, soumise à la TVA, jamais à un financeur ; la formation n'est due qu'au prorata des heures suivies |
 
 ## Annexe – Questionnaires d'évaluation provisoires
 

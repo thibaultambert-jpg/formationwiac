@@ -307,6 +307,10 @@ export function EditEnrollmentDialog({
     billingCompany: SearchOption | null;
     cancellationReason: string | null;
     dropoutReason: string | null;
+    fundingSubrogation: boolean;
+    funder: SearchOption | null;
+    fundingAgreementNumber: string | null;
+    fundedAmount: string | undefined;
   };
 }) {
   const [open, setOpen] = useState(false);
@@ -362,6 +366,31 @@ export function EditEnrollmentDialog({
                 search={searchCompanies}
                 initial={enrollment.billingCompany}
               />
+              <fieldset className="space-y-3 rounded-lg border p-3">
+                <legend className="px-1 text-sm font-medium">Prise en charge par un financeur (OPCO…)</legend>
+                <input type="hidden" name="fundingDetails" value="1" />
+                <CheckboxField
+                  name="fundingSubrogation"
+                  label="Subrogation de paiement"
+                  hint="Le financeur nous paie directement la part prise en charge ; le reste est facturé à l'entreprise."
+                  defaultChecked={enrollment.fundingSubrogation}
+                />
+                <SearchPicker name="funderId" label="Financeur" search={searchCompanies} initial={enrollment.funder} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <TextField
+                    name="fundingAgreementNumber"
+                    label="N° d'accord de prise en charge"
+                    defaultValue={enrollment.fundingAgreementNumber}
+                  />
+                  <TextField
+                    name="fundedAmount"
+                    label="Montant pris en charge HT (€)"
+                    inputMode="decimal"
+                    defaultValue={enrollment.fundedAmount}
+                    hint="Vide : la totalité du réalisé."
+                  />
+                </div>
+              </fieldset>
             </>
           ) : null}
           <SubmitButton>Enregistrer</SubmitButton>

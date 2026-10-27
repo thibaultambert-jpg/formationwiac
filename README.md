@@ -203,9 +203,25 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
 
 ## Facturation des externes (Pennylane)
 
-Les sessions clôturées sont facturées sur le réalisé, une facture par entreprise payeuse (l'entreprise de facturation de
-l'inscription, sinon celle du participant). Les factures sont créées **en brouillon** dans Pennylane : la comptabilité les
-relit, les numérote et les envoie depuis Pennylane.
+Les sessions clôturées sont facturées sur le réalisé, une facture par payeur : l'entreprise payeuse (l'entreprise de
+facturation de l'inscription, sinon celle du participant) et, en cas de subrogation, le financeur (OPCO). Les factures
+sont créées **en brouillon** dans Pennylane : la comptabilité les relit, les numérote et les envoie depuis Pennylane.
+
+Règles appliquées (organisme certifié Qualiopi) :
+
+- **Seules les heures suivies sont dues au titre de la formation** (convention, article 5) : le montant proposé est le prix
+  appliqué au prorata des heures signées, comme le certificat de réalisation.
+- **Subrogation OPCO** (au cas par cas, dans le dialogue **Modifier** de l'inscription : subrogation, financeur, n°
+  d'accord de prise en charge, montant pris en charge) : la part prise en charge est facturée à l'OPCO avec le numéro
+  d'accord, le reste à charge à l'entreprise. Joindre à la facture OPCO le certificat de réalisation et les feuilles
+  d'émargement (onglet **Documents**). Sans subrogation, tout est facturé à l'entreprise, qui se fait rembourser.
+- **CPF, France Travail, Région** : ces inscriptions sont réglées sur la plateforme du financeur (EDOF…) et n'apparaissent
+  pas dans la facturation Pennylane ; l'onglet les signale « facturées hors Pennylane ».
+- **Dédit** (absence, abandon, annulation) : ligne distincte « Indemnité de dédit », qui n'est pas une action de formation
+  (article L6354-1 du Code du travail) : jamais facturée à un financeur, soumise à la TVA (20 %), plafonnée à la part du
+  prix non réalisée, avec un motif. À n'utiliser que si la convention le prévoit.
+- **BPF** : le chiffre d'affaires de formation est celui des factures (hors dédit), réparti entre l'OPCO et les fonds de
+  l'entreprise en cas de subrogation ; à défaut de facture, le prix appliqué.
 
 Mise en place :
 
@@ -219,11 +235,11 @@ Mise en place :
 
 Facturer une session : liste des sessions, filtre **Facturation › À facturer**, puis onglet **Facturation** de la session.
 
-1. Pour chaque entreprise, l'écran propose le prix appliqué pour un participant présent ou ayant abandonné, 0 € pour un
-   absent, avec les heures signées. Tout montant différent du montant proposé (absence facturée, présence partielle,
-   geste commercial) exige un motif.
+1. Pour chaque payeur, l'écran propose les lignes de chaque participant (formation au prorata des heures signées, part
+   prise en charge, dédit à 0 €), avec les heures signées. Tout montant différent du montant proposé exige un motif.
 2. **Créer la facture brouillon dans Pennylane** : la facture et ses lignes sont enregistrées, puis envoyées à Pennylane.
-   Une inscription ne peut figurer que sur une seule facture active.
+   Chaque type de ligne d'une inscription (formation, part prise en charge, dédit) ne figure que sur une seule facture
+   active.
 3. En cas d'erreur (Pennylane indisponible, jeton invalide), l'erreur s'affiche avec un bouton **Réessayer**. La nouvelle
    tentative cherche d'abord la facture dans Pennylane par sa référence externe : elle ne crée jamais de doublon.
 4. **Détacher** (avec un motif) libère les participants d'une facture supprimée ou annulée par un avoir dans Pennylane,

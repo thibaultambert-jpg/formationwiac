@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { parisDateTimeToUtc } from "@/lib/dates";
 import { SESSION_STATUS_LABELS } from "@/lib/labels";
 import { SEAT_HOLDING_STATUSES } from "@/server/domain/capacity";
+import { OUTSIDE_FUNDING_TYPES } from "@/server/domain/invoicing";
 
 export type SessionFilters = {
   trainingId: string;
@@ -16,15 +17,24 @@ export type SessionFilters = {
 };
 
 /**
- * Priced external trainee who attended (present or dropped out) and is not on
- * an active invoice. Absent trainees are left out: billing them is decided on
- * the invoice of their company.
+ * Priced external trainee who attended (present or dropped out), invoiced
+ * through Pennylane (not CPF, France Travail or Region), whose training is not
+ * on an active invoice yet (under subrogation: its funded part). Absent
+ * trainees are left out: billing a cancellation fee is decided on the
+ * invoice of their company.
  */
 export const TO_INVOICE_ENROLLMENT_WHERE = {
   participantType: "external",
   status: { in: ["present", "dropped_out"] },
+  fundingType: { notIn: [...OUTSIDE_FUNDING_TYPES] },
   appliedPrice: { gt: 0 },
-  invoiceLines: { none: { active: true } },
+  OR: [
+    {
+      fundingSubrogation: false,
+      invoiceLines: { none: { active: true, kind: { in: ["training", "funded_training"] } } },
+    },
+    { fundingSubrogation: true, invoiceLines: { none: { active: true, kind: "funded_training" } } },
+  ],
 } satisfies Prisma.EnrollmentWhereInput;
 
 /** Closed sessions with at least one enrollment to invoice (dashboard, sessions list filter). */

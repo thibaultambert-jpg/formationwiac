@@ -43,4 +43,27 @@ describe("BPF (B7)", () => {
   it("leaves out enrollments without any signed hour", () => {
     expect(bpfSummary(rows, true).byFunding.some((item) => item.key === "cpf")).toBe(false);
   });
+
+  it("splits the revenue of a subrogated training between the funder and the company", () => {
+    const summary = bpfSummary(
+      [
+        {
+          participantType: "external",
+          fundingType: "opco",
+          hours: 14,
+          revenue: 1400,
+          revenueShares: [
+            { fundingType: "opco", amount: 1000 },
+            { fundingType: "company", amount: 400 },
+          ],
+        },
+      ],
+      false,
+    );
+    expect(summary.total.revenue).toBe(1400);
+    expect(summary.byFunding).toEqual([
+      { key: "opco", trainees: 1, hours: 14, revenue: 1000 },
+      { key: "company", trainees: 0, hours: 0, revenue: 400 },
+    ]);
+  });
 });

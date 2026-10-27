@@ -88,6 +88,15 @@ enum InvoiceStatus {
   detached
 }
 
+// What an invoice line bills: the training (paid by the company), the part
+// of the training paid by a funder under subrogation (OPCO), or a
+// cancellation fee (dédit), which is not a training action.
+enum InvoiceLineKind {
+  training
+  funded_training
+  cancellation_fee
+}
+
 enum EnrollmentSource {
   front
   back_office
@@ -390,6 +399,7 @@ model Company {
   mainContact       Participant?            @relation("CompanyMainContact", fields: [mainContactId], references: [id])
   participants      Participant[]           @relation("CompanyParticipants")
   billedEnrollments Enrollment[]
+  fundedEnrollments Enrollment[]            @relation("EnrollmentFunder")
   mergedInto        Company?                @relation("CompanyMerge", fields: [mergedIntoId], references: [id])
   mergedCompanies   Company[]               @relation("CompanyMerge")
   conventions       Convention[]
@@ -431,52 +441,59 @@ model Participant {
 // ───────────── Enrollments and follow-up ─────────────
 
 model Enrollment {
-  id                    String           @id @default(uuid(7)) @db.Uuid
-  sessionId             String           @map("session_id") @db.Uuid
-  participantId         String           @map("participant_id") @db.Uuid
-  status                EnrollmentStatus
+  id                     String           @id @default(uuid(7)) @db.Uuid
+  sessionId              String           @map("session_id") @db.Uuid
+  participantId          String           @map("participant_id") @db.Uuid
+  status                 EnrollmentStatus
   // Frozen at enrollment time, so that a later change of the participant does
   // not rewrite history.
-  participantType       ParticipantType  @map("participant_type")
-  fundingType           FundingType      @default(none) @map("funding_type")
-  source                EnrollmentSource
-  enrolledById          String?          @map("enrolled_by_id") @db.Uuid
+  participantType        ParticipantType  @map("participant_type")
+  fundingType            FundingType      @default(none) @map("funding_type")
+  source                 EnrollmentSource
+  enrolledById           String?          @map("enrolled_by_id") @db.Uuid
   // Billing fields: price and paying company, invoiced through Pennylane (src/server/services/invoicing.ts).
-  appliedPrice          Decimal?         @map("applied_price") @db.Decimal(10, 2)
-  billingCompanyId      String?          @map("billing_company_id") @db.Uuid
-  enrolledAt            DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
-  motivation            String?          @db.Text
-  cancelledAt           DateTime?        @map("cancelled_at") @db.Timestamptz
-  cancellationReason    String?          @map("cancellation_reason")
-  conventionId          String?          @map("convention_id") @db.Uuid
+  appliedPrice           Decimal?         @map("applied_price") @db.Decimal(10, 2)
+  billingCompanyId       String?          @map("billing_company_id") @db.Uuid
+  // Funder paid directly by the organization (OPCO subrogation): it is
+  // invoiced the funded amount, the company the remainder.
+  fundingSubrogation     Boolean          @default(false) @map("funding_subrogation")
+  funderId               String?          @map("funder_id") @db.Uuid
+  fundingAgreementNumber String?          @map("funding_agreement_number")
+  fundedAmount           Decimal?         @map("funded_amount") @db.Decimal(10, 2)
+  enrolledAt             DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
+  motivation             String?          @db.Text
+  cancelledAt            DateTime?        @map("cancelled_at") @db.Timestamptz
+  cancellationReason     String?          @map("cancellation_reason")
+  conventionId           String?          @map("convention_id") @db.Uuid
   // Admin waiver of the training agreement (B2), with a mandatory reason.
-  agreementWaiverReason String?          @map("agreement_waiver_reason")
-  agreementWaivedAt     DateTime?        @map("agreement_waived_at") @db.Timestamptz
-  agreementWaivedById   String?          @map("agreement_waived_by_id") @db.Uuid
+  agreementWaiverReason  String?          @map("agreement_waiver_reason")
+  agreementWaivedAt      DateTime?        @map("agreement_waived_at") @db.Timestamptz
+  agreementWaivedById    String?          @map("agreement_waived_by_id") @db.Uuid
   // Needs analysis of the client (D2): a note and/or a document.
-  needsAnalysisNote     String?          @map("needs_analysis_note") @db.Text
-  needsAnalysisPath     String?          @map("needs_analysis_path")
+  needsAnalysisNote      String?          @map("needs_analysis_note") @db.Text
+  needsAnalysisPath      String?          @map("needs_analysis_path")
   // Entry assessment passed outside the app (D3), as an uploaded file.
-  positioningPath       String?          @map("positioning_path")
+  positioningPath        String?          @map("positioning_path")
   // Learning assessment (D5), printed on the certificate.
-  learningResult        LearningResult?  @map("learning_result")
-  learningComment       String?          @map("learning_comment") @db.Text
-  learningFilePath      String?          @map("learning_file_path")
-  learningAssessedAt    DateTime?        @map("learning_assessed_at") @db.Timestamptz
-  learningAssessedBy    String?          @map("learning_assessed_by")
+  learningResult         LearningResult?  @map("learning_result")
+  learningComment        String?          @map("learning_comment") @db.Text
+  learningFilePath       String?          @map("learning_file_path")
+  learningAssessedAt     DateTime?        @map("learning_assessed_at") @db.Timestamptz
+  learningAssessedBy     String?          @map("learning_assessed_by")
   // Dropout (D6).
-  droppedOutAt          DateTime?        @map("dropped_out_at") @db.Timestamptz
-  dropoutReason         String?          @map("dropout_reason")
+  droppedOutAt           DateTime?        @map("dropped_out_at") @db.Timestamptz
+  dropoutReason          String?          @map("dropout_reason")
   // Adaptation need (D8): restricted to admins, every read is logged, never
   // exported nor printed. Free text about the adaptation only, no health data.
-  adaptationNeed        String?          @map("adaptation_need") @db.Text
-  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  adaptationNeed         String?          @map("adaptation_need") @db.Text
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   session        TrainingSession        @relation(fields: [sessionId], references: [id])
   participant    Participant            @relation(fields: [participantId], references: [id])
   convention     Convention?            @relation(fields: [conventionId], references: [id])
   enrolledBy     User?                  @relation("EnrolledBy", fields: [enrolledById], references: [id])
   billingCompany Company?               @relation(fields: [billingCompanyId], references: [id])
+  funder         Company?               @relation("EnrollmentFunder", fields: [funderId], references: [id])
   attendances    Attendance[]
   corrections    AttendanceCorrection[]
   evaluations    Evaluation[]
@@ -489,6 +506,7 @@ model Enrollment {
   @@index([sessionId, status, enrolledAt])
   @@index([participantId])
   @@index([conventionId])
+  @@index([funderId])
   @@map("enrollments")
 }
 
@@ -551,20 +569,23 @@ model Invoice {
 }
 
 // One participant on an invoice. The amount may differ from the proposed one
-// (absence, partial attendance) only with a reason. An enrollment is on one
-// active invoice at most (partial unique index in the migration).
+// only with a reason. An enrollment has one active line of each kind at most
+// (partial unique index in the migration).
 model InvoiceLine {
-  id               String   @id @default(uuid(7)) @db.Uuid
-  invoiceId        String   @map("invoice_id") @db.Uuid
-  enrollmentId     String   @map("enrollment_id") @db.Uuid
+  id               String          @id @default(uuid(7)) @db.Uuid
+  invoiceId        String          @map("invoice_id") @db.Uuid
+  enrollmentId     String          @map("enrollment_id") @db.Uuid
+  kind             InvoiceLineKind @default(training)
+  // Training lines take the VAT of the training, a cancellation fee 20 %.
+  vatRate          VatRate         @default(standard_20) @map("vat_rate")
   label            String
-  quantity         Decimal  @default(1) @db.Decimal(10, 2)
-  unitPriceExclTax Decimal  @map("unit_price_excl_tax") @db.Decimal(10, 2)
-  proposedPrice    Decimal  @map("proposed_price") @db.Decimal(10, 2)
-  adjustmentReason String?  @map("adjustment_reason")
+  quantity         Decimal         @default(1) @db.Decimal(10, 2)
+  unitPriceExclTax Decimal         @map("unit_price_excl_tax") @db.Decimal(10, 2)
+  proposedPrice    Decimal         @map("proposed_price") @db.Decimal(10, 2)
+  adjustmentReason String?         @map("adjustment_reason")
   // Copy of the invoice status, so that the partial unique index can ignore detached invoices.
-  active           Boolean  @default(true)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  active           Boolean         @default(true)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
 
   invoice    Invoice    @relation(fields: [invoiceId], references: [id])
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
