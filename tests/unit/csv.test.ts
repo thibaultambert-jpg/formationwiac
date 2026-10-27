@@ -60,6 +60,7 @@ describe("parseImportRows", () => {
     expect(rows).toEqual([
       {
         line: 2,
+        type: "external",
         companyName: "ACME",
         siret: "73282932000074",
         firstName: "Jeanne",
@@ -73,8 +74,25 @@ describe("parseImportRows", () => {
 
   it("reports missing required columns", () => {
     const { errors } = parseImportRows([["nom", "email"]]);
-    expect(errors[0].message).toContain("entreprise");
-    expect(errors[0].message).toContain("prenom");
+    expect(errors[0].message).toBe("Colonnes obligatoires manquantes : prenom.");
+  });
+
+  it("reads collaborators (internal) without a company", () => {
+    const { rows, errors } = parseImportRows([
+      ["type", "entreprise", "prenom", "nom", "email"],
+      ["interne", "", "Paul", "Martin", "paul@corp.fr"],
+      ["", "", "Léa", "Petit", "lea@corp.fr"],
+      ["externe", "", "Zoé", "Roux", "zoe@ext.fr"],
+      ["stagiaire", "ACME", "Max", "Bon", "max@acme.fr"],
+    ]);
+    expect(rows.map((row) => [row.email, row.type])).toEqual([
+      ["paul@corp.fr", "internal"],
+      ["lea@corp.fr", "internal"],
+    ]);
+    expect(errors).toEqual([
+      { line: 4, message: "entreprise manquante" },
+      { line: 5, message: "type invalide (interne ou externe)" },
+    ]);
   });
 
   it("reports invalid lines with their line number and keeps valid ones", () => {

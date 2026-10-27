@@ -90,6 +90,10 @@ by lot (section 11) and stops at the end of each lot for validation.
   closed session and paying company, created as a Pennylane draft; an enrollment is on one active invoice at most
   (`invoice_lines.active` partial unique index); invoices are never deleted, only detached with a reason. The Pennylane
   external reference is the invoice id, so a retry looks it up before creating.
+- CSV imports (sessions, trainers, companies, enrollees): pure parsers and example files in
+  `src/server/domain/csv-import.ts` (enrollees: `participant-import.ts`), upload and report helpers in
+  `src/server/csv-upload.ts`, dialog `CsvImportDialog`, example files served by `/admin/modeles-import/[type]`. Invalid
+  lines are skipped and listed; existing records are never modified by an import.
 - Every CSV export goes through `csvResponse()` with an audit trace (G2); admin downloads of nominative files are
   audited in `/fichiers`. Security headers: `src/lib/security-headers.ts` (applied in `next.config.ts`).
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by

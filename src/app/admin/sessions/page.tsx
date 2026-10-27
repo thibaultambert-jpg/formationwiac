@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarDays, Download, List, Plus } from "lucide-react";
+import { CsvImportDialog } from "@/components/forms/csv-import-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterBar } from "@/components/layout/filter-bar";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,6 +12,7 @@ import { db } from "@/lib/db";
 import { formatDateRange, parisMonthBounds, toParisDateInput } from "@/lib/dates";
 import { SESSION_STATUS_LABELS, SESSION_STATUS_TONES } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
+import { importSessionsCsv } from "./actions";
 import {
   listSessions,
   readSessionFilters,
@@ -69,6 +71,25 @@ export default async function SessionsPage({ searchParams }: PageProps<"/admin/s
                 Exporter (CSV)
               </a>
             </Button>
+            <CsvImportDialog
+              title="Importer des sessions"
+              templateHref="/admin/modeles-import/sessions"
+              action={importSessionsCsv}
+              description={
+                <>
+                  <p>
+                    Une ligne par session, créée en brouillon. Colonnes obligatoires : <strong>formation</strong>{" "}
+                    (intitulé exact ou slug), <strong>creneaux</strong> (« JJ/MM/AAAA HH:MM-HH:MM », séparés par « | »)
+                    et <strong>capacite_max</strong>.
+                  </p>
+                  <p>
+                    En option : capacite_min, lieu, lien_visio (lieu ou lien obligatoire), date_limite (JJ/MM/AAAA),
+                    internes, externes, qualiopi (oui/non), formateurs (emails séparés par des virgules), infos_acces,
+                    notes_internes.
+                  </p>
+                </>
+              }
+            />
             <Button asChild>
               <Link href="/admin/sessions/nouvelle">
                 <Plus aria-hidden="true" />

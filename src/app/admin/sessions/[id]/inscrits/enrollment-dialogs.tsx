@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRightLeft, Building2, FileCheck2, Pencil, Upload, UserPlus } from "lucide-react";
+import { ArrowRightLeft, Building2, FileCheck2, Pencil, UserPlus } from "lucide-react";
 import { ActionForm, SubmitButton } from "@/components/forms/action-form";
-import { CheckboxField, FileField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
+import { CsvImportDialog } from "@/components/forms/csv-import-dialog";
+import { CheckboxField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
 import { SearchPicker } from "@/components/forms/search-picker";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ import { searchCompanies, searchExternalParticipants, searchUsers, type SearchOp
 import {
   addExternalEnrollment,
   addInternalEnrollment,
-  importExternalCsv,
+  importParticipantsCsv,
   moveEnrollmentAction,
   updateEnrollmentAction,
   waiveAgreementAction,
@@ -262,40 +263,32 @@ export function AddExternalDialog({ sessionId, disabled }: { sessionId: string; 
   );
 }
 
-export function ImportCsvDialog({ sessionId, disabled }: { sessionId: string; disabled?: boolean }) {
+export function ImportCsvDialog({ sessionId, openToExternal }: { sessionId: string; openToExternal: boolean }) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" disabled={disabled}>
-          <Upload aria-hidden="true" />
-          Importer un CSV
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Importer des participants externes</DialogTitle>
-          <DialogDescription>
-            Fichier CSV (séparateur « ; » ou « , ») avec les colonnes <strong>entreprise</strong>,{" "}
-            <strong>prenom</strong>, <strong>nom</strong>, <strong>email</strong> et, en option, <strong>siret</strong>,{" "}
-            <strong>fonction</strong>, <strong>telephone</strong>. Les entreprises et contacts existants sont retrouvés
-            par SIRET, nom et email.
-          </DialogDescription>
-        </DialogHeader>
-        <a
-          href="/modele-import-participants.csv"
-          download
-          className="text-primary text-sm underline underline-offset-4"
-        >
-          Télécharger le modèle de fichier
-        </a>
-        <ActionForm action={importExternalCsv}>
-          <input type="hidden" name="sessionId" value={sessionId} />
-          <FileField name="file" label="Fichier CSV" required accept=".csv,text/csv" />
-          <CheckboxField name="silent" label="Ne pas envoyer d'email aux participants importés" />
-          <SubmitButton>Importer</SubmitButton>
-        </ActionForm>
-      </DialogContent>
-    </Dialog>
+    <CsvImportDialog
+      title="Importer des inscrits"
+      templateHref="/admin/modeles-import/inscrits"
+      action={importParticipantsCsv}
+      description={
+        <>
+          <p>
+            Fichier CSV (séparateur « ; » ou « , ») avec les colonnes <strong>prenom</strong>, <strong>nom</strong>,{" "}
+            <strong>email</strong> et, pour les externes, <strong>entreprise</strong> (en option : <strong>type</strong>{" "}
+            interne ou externe, <strong>siret</strong>, <strong>fonction</strong>, <strong>telephone</strong>).
+          </p>
+          <p>
+            Les collaborateurs sont retrouvés par leur email (compte Google déjà connecté une fois). Les entreprises et
+            contacts externes existants sont retrouvés par SIRET, nom et email, les autres sont créés.
+            {openToExternal
+              ? null
+              : " Cette session n'est pas ouverte aux externes : seuls les collaborateurs seront inscrits."}
+          </p>
+        </>
+      }
+    >
+      <input type="hidden" name="sessionId" value={sessionId} />
+      <CheckboxField name="silent" label="Ne pas envoyer d'email aux participants importés" />
+    </CsvImportDialog>
   );
 }
 
