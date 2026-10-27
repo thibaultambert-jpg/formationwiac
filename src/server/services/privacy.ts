@@ -196,6 +196,22 @@ export async function anonymizeParticipant(participantId: string, actorId: strin
       where: { enrollment: { participantId: participant.id }, type: { in: EMAIL_DOCUMENT_TYPES } },
       data: { filePath: null },
     });
+    // The invoice itself is kept in Pennylane (accounting retention); the local copy of its label loses the name.
+    const invoiceLines = await tx.invoiceLine.findMany({
+      where: { enrollment: { participantId: participant.id } },
+      select: { id: true, label: true },
+    });
+    for (const line of invoiceLines) {
+      await tx.invoiceLine.update({
+        where: { id: line.id },
+        data: {
+          label: line.label.replace(
+            `${participant.firstName} ${participant.lastName}`,
+            `${ANONYMIZED_FIRST_NAME} ${ANONYMIZED_LAST_NAME}`,
+          ),
+        },
+      });
+    }
     await tx.accessToken.updateMany({
       where: { enrollment: { participantId: participant.id }, revokedAt: null },
       data: { revokedAt: now },

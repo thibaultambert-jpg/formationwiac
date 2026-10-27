@@ -13,13 +13,13 @@ Objectifs mesurables de la V1 :
 - Inscrire un participant externe depuis le BO sans ressaisie (recherche d'entreprise et de contact existants).
 - Générer convocations, feuilles d'émargement et attestations depuis la fiche session.
 
-La facturation est volontairement exclue de la V1 : l'outil de facturation de l'entreprise n'est pas encore choisi. Le modèle de données doit toutefois conserver les informations nécessaires (prix, entreprise payeuse) pour brancher cet outil plus tard.
+La facturation était exclue de la V1 faute d'outil choisi ; le modèle de données conservait les informations nécessaires (prix, entreprise payeuse). L'outil retenu est **Pennylane** : la facturation des externes fait l'objet du lot 5 (section 11).
 
 ## 2. Périmètre
 
 | Inclus en V1 | Exclu de la V1 (évolutions possibles) |
 | --- | --- |
-| Catalogue des formations (programmes) | Facturation et devis |
+| Catalogue des formations (programmes) | Devis (la facturation des externes arrive au lot 5) |
 | Sessions : dates, lieu ou lien visio, capacité, formateur | Gestion des financements OPCO et subrogation |
 | Fiches formateurs (internes et externes) | Bilan Pédagogique et Financier (BPF) |
 | Entreprises clientes et participants externes | Espace de connexion pour les externes |
@@ -178,7 +178,7 @@ Documents PDF à générer, avec logo et coordonnées de l'organisme :
 
 ## 11. Plan de livraison et critères d'acceptation
 
-Le développement se fait en quatre lots ; chaque lot est livré, déployé et testé avant de passer au suivant.
+Le développement se fait par lots ; chaque lot est livré, déployé et testé avant de passer au suivant.
 
 | Lot | Contenu | Critère d'acceptation |
 | --- | --- | --- |
@@ -186,6 +186,7 @@ Le développement se fait en quatre lots ; chaque lot est livré, déployé et t
 | 2. BO cœur | Formations, formateurs, sessions avec créneaux, entreprises et externes, inscriptions BO, import CSV, exports | Un admin crée une session de 2 jours et y inscrit 3 externes d'une nouvelle entreprise sans quitter la fiche session |
 | 3. Front | Catalogue, fiche formation, inscription, liste d'attente, désinscription, « Mes formations », emails de confirmation | Un collaborateur s'inscrit en 3 clics ; à capacité atteinte, le suivant passe en liste d'attente et est promu à la première annulation |
 | 4. Documents et suivi | Convocations, émargement numérique, attestations PDF, évaluations, rappels automatiques, tableau de bord, journal d'audit | Pour une session terminée, le BO télécharge un ZIP contenant émargements signés, évaluations et attestations |
+| 5. Facturation Pennylane | Onglet Facturation d'une session clôturée : une facture par entreprise payeuse sur le réalisé (montant proposé : prix appliqué pour un présent ou un abandon, 0 € pour un absent ; tout ajustement exige un motif), créée en brouillon dans Pennylane par l'API v2 (client créé à la première facture), TVA réglée par formation (20 % ou exonérée avec mention légale), nouvelle tentative sans doublon, détachement motivé, filtre « À facturer » de la liste des sessions | Pour une session clôturée avec deux externes d'une même entreprise (un présent, un absent), l'admin crée en un clic un brouillon Pennylane ne facturant que le présent ; l'inscription ne peut plus être facturée une seconde fois |
 
 ## 12. Consignes pour Claude Code et points à trancher
 
@@ -208,6 +209,9 @@ Décisions prises :
 | Service d'envoi des emails | Gmail de l'entreprise (Gmail API) |
 | Reprise de l'historique Dendreo | Non en V1 |
 | Questionnaires d'évaluation | Version provisoire en annexe, contenu définitif fourni plus tard ; les questions doivent rester éditables dans les Paramètres |
+| Outil de facturation | Pennylane, par l'API ; factures créées en brouillon (numérotées et envoyées depuis Pennylane) |
+| Moment et base de facturation | Après la clôture de la session, au réalisé, une facture par entreprise payeuse ; l'admin ajuste chaque ligne avec un motif |
+| TVA des formations | Réglée sur chaque formation : 20 % ou exonérée (mention légale réglable dans les paramètres) |
 
 ## Annexe – Questionnaires d'évaluation provisoires
 

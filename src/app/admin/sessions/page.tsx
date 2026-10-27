@@ -124,6 +124,13 @@ export default async function SessionsPage({ searchParams }: PageProps<"/admin/s
             value: filters.status,
             options: Object.entries(SESSION_STATUS_LABELS).map(([value, label]) => ({ value, label })),
           },
+          {
+            type: "select",
+            name: "facturation",
+            label: "Facturation",
+            value: filters.invoicing,
+            options: [{ value: "a-facturer", label: "À facturer" }],
+          },
           ...(view === "table"
             ? ([
                 { type: "date", name: "du", label: "Du", value: filters.from },

@@ -3,6 +3,7 @@
 import { ActionForm, SubmitButton } from "@/components/forms/action-form";
 import { CheckboxField, FileField, SelectField, TextareaField, TextField } from "@/components/forms/fields";
 import { MODALITY_LABELS } from "@/lib/labels";
+import { VAT_RATE_LABELS } from "@/server/domain/invoicing";
 import type { ActionState } from "@/server/forms";
 
 export type TrainingFormValues = {
@@ -23,10 +24,12 @@ export type TrainingFormValues = {
   durationHours: string;
   modality: string;
   priceExclTax: string | undefined;
+  vatRate: string;
   active: boolean;
 };
 
 const MODALITY_OPTIONS = Object.entries(MODALITY_LABELS).map(([value, label]) => ({ value, label }));
+const VAT_OPTIONS = Object.entries(VAT_RATE_LABELS).map(([value, label]) => ({ value, label }));
 
 export function TrainingForm({
   action,
@@ -78,6 +81,15 @@ export function TrainingForm({
           defaultValue={training?.priceExclTax}
         />
       </div>
+      <SelectField
+        name="vatRate"
+        label="TVA des factures"
+        required
+        defaultValue={training?.vatRate ?? "standard_20"}
+        options={VAT_OPTIONS}
+        hint="Appliquée aux factures des participants externes créées dans Pennylane."
+        className="sm:max-w-xs"
+      />
       <TextareaField
         name="objectives"
         label="Objectifs pédagogiques"

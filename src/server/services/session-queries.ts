@@ -11,7 +11,26 @@ export type SessionFilters = {
   status: string;
   from: string;
   to: string;
+  /** "a-facturer": closed sessions with external enrollments not invoiced yet. */
+  invoicing: string;
 };
+
+/**
+ * Closed sessions with a priced external trainee who attended (present or
+ * dropped out) and is not on an active invoice. Absent trainees are left out:
+ * billing them is decided on the invoice of their company.
+ */
+export const TO_INVOICE_WHERE = {
+  status: "completed",
+  enrollments: {
+    some: {
+      participantType: "external",
+      status: { in: ["present", "dropped_out"] },
+      appliedPrice: { gt: 0 },
+      invoiceLines: { none: { active: true } },
+    },
+  },
+} satisfies Prisma.TrainingSessionWhereInput;
 
 export function readSessionFilters(params: Record<string, string | string[] | undefined>): SessionFilters {
   const get = (key: string) => (typeof params[key] === "string" ? (params[key] as string).trim() : "");
@@ -21,6 +40,7 @@ export function readSessionFilters(params: Record<string, string | string[] | un
     status: get("statut"),
     from: get("du"),
     to: get("au"),
+    invoicing: get("facturation"),
   };
 }
 
@@ -31,6 +51,7 @@ export function sessionFiltersToQuery(filters: SessionFilters): Record<string, s
   if (filters.status) query.statut = filters.status;
   if (filters.from) query.du = filters.from;
   if (filters.to) query.au = filters.to;
+  if (filters.invoicing) query.facturation = filters.invoicing;
   return query;
 }
 
@@ -52,6 +73,7 @@ export function sessionWhere(
     ...(filters.trainerId ? { trainers: { some: { trainerId: filters.trainerId } } } : {}),
     ...(filters.status in SESSION_STATUS_LABELS ? { status: filters.status as SessionStatus } : {}),
     ...(slotConditions.length > 0 ? { slots: { some: { AND: slotConditions } } } : {}),
+    ...(filters.invoicing === "a-facturer" ? { AND: [TO_INVOICE_WHERE] } : {}),
   };
 }
 

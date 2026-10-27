@@ -73,6 +73,21 @@ enum ConventionStatus {
   cancelled
 }
 
+// VAT applied to the invoices of a training (Pennylane codes in src/server/domain/invoicing.ts).
+enum VatRate {
+  exempt // continuing education exemption (art. 261-4-4° a CGI)
+  standard_20
+}
+
+// Invoice pushed to Pennylane: pending until the API call succeeds, failed with
+// the error otherwise, detached when an admin releases its enrollments.
+enum InvoiceStatus {
+  pending
+  sent
+  failed
+  detached
+}
+
 enum EnrollmentSource {
   front
   back_office
@@ -234,6 +249,7 @@ model Training {
   durationHours     Decimal          @map("duration_hours") @db.Decimal(5, 1)
   modality          TrainingModality
   priceExclTax      Decimal?         @map("price_excl_tax") @db.Decimal(10, 2)
+  vatRate           VatRate          @default(standard_20) @map("vat_rate")
   thingsToBring     String?          @map("things_to_bring") @db.Text
   // Public information (Qualiopi indicators 1 and 2, prior information B3).
   accessDelay       String?          @map("access_delay") @db.Text
@@ -313,6 +329,7 @@ model TrainingSession {
   conventions            Convention[]
   stakeholderEvaluations StakeholderEvaluation[]
   complaints             Complaint[]
+  invoices               Invoice[]
 
   @@index([trainingId])
   @@index([status])
@@ -351,20 +368,24 @@ model SessionTrainer {
 // ───────────── External companies and participants ─────────────
 
 model Company {
-  id               String    @id @default(uuid(7)) @db.Uuid
-  name             String
-  siret            String?   @unique
-  addressLine      String?   @map("address_line")
-  postalCode       String?   @map("postal_code")
-  city             String?
-  country          String    @default("France")
-  mainContactId    String?   @unique @map("main_contact_id") @db.Uuid
-  billingEmail     String?   @map("billing_email")
-  hubspotCompanyId String?   @unique @map("hubspot_company_id")
-  mergedIntoId     String?   @map("merged_into_id") @db.Uuid
-  archivedAt       DateTime? @map("archived_at") @db.Timestamptz
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  name                String
+  siret               String?   @unique
+  addressLine         String?   @map("address_line")
+  postalCode          String?   @map("postal_code")
+  city                String?
+  country             String    @default("France")
+  mainContactId       String?   @unique @map("main_contact_id") @db.Uuid
+  billingEmail        String?   @map("billing_email")
+  // Intra-community VAT number, printed on the invoices.
+  vatNumber           String?   @map("vat_number")
+  // Customer created in Pennylane by the first invoice.
+  pennylaneCustomerId String?   @unique @map("pennylane_customer_id")
+  hubspotCompanyId    String?   @unique @map("hubspot_company_id")
+  mergedIntoId        String?   @map("merged_into_id") @db.Uuid
+  archivedAt          DateTime? @map("archived_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   mainContact       Participant?            @relation("CompanyMainContact", fields: [mainContactId], references: [id])
   participants      Participant[]           @relation("CompanyParticipants")
@@ -373,6 +394,7 @@ model Company {
   mergedCompanies   Company[]               @relation("CompanyMerge")
   conventions       Convention[]
   evaluations       StakeholderEvaluation[]
+  invoices          Invoice[]
 
   @@index([name])
   @@map("companies")
@@ -419,7 +441,7 @@ model Enrollment {
   fundingType           FundingType      @default(none) @map("funding_type")
   source                EnrollmentSource
   enrolledById          String?          @map("enrolled_by_id") @db.Uuid
-  // Billing fields kept for the future invoicing tool, no logic in V1.
+  // Billing fields: price and paying company, invoiced through Pennylane (src/server/services/invoicing.ts).
   appliedPrice          Decimal?         @map("applied_price") @db.Decimal(10, 2)
   billingCompanyId      String?          @map("billing_company_id") @db.Uuid
   enrolledAt            DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
@@ -460,6 +482,7 @@ model Enrollment {
   evaluations    Evaluation[]
   documents      Document[]
   accessTokens   AccessToken[]
+  invoiceLines   InvoiceLine[]
 
   @@unique([sessionId, participantId])
   // Waitlist order: first waitlisted by enrolledAt.
@@ -496,6 +519,59 @@ model Convention {
 
   @@index([sessionId, companyId])
   @@map("conventions")
+}
+
+// Invoice of a closed session to one paying company, created as a draft in
+// Pennylane (numbered and sent from there). Never deleted: detached instead,
+// which releases its enrollments.
+model Invoice {
+  id                 String        @id @default(uuid(7)) @db.Uuid
+  sessionId          String        @map("session_id") @db.Uuid
+  companyId          String        @map("company_id") @db.Uuid
+  status             InvoiceStatus @default(pending)
+  // Frozen from the training when the invoice is created.
+  vatRate            VatRate       @map("vat_rate")
+  totalExclTax       Decimal       @map("total_excl_tax") @db.Decimal(10, 2)
+  pennylaneInvoiceId String?       @unique @map("pennylane_invoice_id")
+  pennylaneUrl       String?       @map("pennylane_url")
+  error              String?
+  createdById        String?       @map("created_by_id") @db.Uuid
+  sentAt             DateTime?     @map("sent_at") @db.Timestamptz
+  detachedAt         DateTime?     @map("detached_at") @db.Timestamptz
+  detachReason       String?       @map("detach_reason")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  session TrainingSession @relation(fields: [sessionId], references: [id])
+  company Company         @relation(fields: [companyId], references: [id])
+  lines   InvoiceLine[]
+
+  @@index([sessionId, companyId])
+  @@map("invoices")
+}
+
+// One participant on an invoice. The amount may differ from the proposed one
+// (absence, partial attendance) only with a reason. An enrollment is on one
+// active invoice at most (partial unique index in the migration).
+model InvoiceLine {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  invoiceId        String   @map("invoice_id") @db.Uuid
+  enrollmentId     String   @map("enrollment_id") @db.Uuid
+  label            String
+  quantity         Decimal  @default(1) @db.Decimal(10, 2)
+  unitPriceExclTax Decimal  @map("unit_price_excl_tax") @db.Decimal(10, 2)
+  proposedPrice    Decimal  @map("proposed_price") @db.Decimal(10, 2)
+  adjustmentReason String?  @map("adjustment_reason")
+  // Copy of the invoice status, so that the partial unique index can ignore detached invoices.
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  invoice    Invoice    @relation(fields: [invoiceId], references: [id])
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@index([invoiceId])
+  @@index([enrollmentId])
+  @@map("invoice_lines")
 }
 
 // Signature of a participant for one slot. Append-only (database triggers):
@@ -724,6 +800,8 @@ model OrganizationSettings {
   // Personal attendance links: usable from N minutes before the slot until N minutes after its end.
   attendanceMarginBefore    Int      @default(30) @map("attendance_margin_before")
   attendanceMarginAfter     Int      @default(60) @map("attendance_margin_after")
+  // Legal mention printed on invoices exempt from VAT.
+  vatExemptionMention       String?  @map("vat_exemption_mention")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("organization_settings")

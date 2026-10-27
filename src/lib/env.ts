@@ -22,6 +22,10 @@ const serverEnvSchema = z.object({
   GMAIL_SENDER_ADDRESS: z.email().optional(),
   // Bearer token expected by /api/cron (Vercel Cron sends it automatically).
   CRON_SECRET: z.string().min(16).optional(),
+  // Pennylane API v2 token (invoicing); when absent, invoices are written to
+  // .storage/pennylane/ in development.
+  PENNYLANE_API_TOKEN: z.string().min(1).optional(),
+  PENNYLANE_API_URL: z.url().default("https://app.pennylane.com/api/external/v2"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

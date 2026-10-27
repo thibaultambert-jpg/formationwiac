@@ -190,6 +190,20 @@ export const CONVENTION_STATUS_TONES: Record<keyof typeof CONVENTION_STATUS_LABE
   cancelled: "secondary",
 };
 
+export const INVOICE_STATUS_LABELS = {
+  pending: "Envoi en cours",
+  sent: "Brouillon créé dans Pennylane",
+  failed: "Échec de l'envoi",
+  detached: "Détachée",
+} as const;
+
+export const INVOICE_STATUS_TONES: Record<keyof typeof INVOICE_STATUS_LABELS, BadgeTone> = {
+  pending: "info",
+  sent: "success",
+  failed: "destructive",
+  detached: "secondary",
+};
+
 export const ATTENDANCE_STATE_LABELS = {
   present: "Présent(e)",
   absent: "Absent(e)",

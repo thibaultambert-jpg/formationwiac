@@ -9,6 +9,7 @@ export type CompanyValues = {
   postalCode: string | null;
   city: string | null;
   billingEmail: string | null;
+  vatNumber: string | null;
   hubspotCompanyId: string | null;
 };
 
@@ -28,6 +29,15 @@ export function CompanyFields({
         <TextField name={`${prefix}name`} label="Raison sociale" required defaultValue={company?.name} />
         <TextField name={`${prefix}siret`} label="SIRET" inputMode="numeric" defaultValue={company?.siret} />
       </div>
+      {compact ? null : (
+        <TextField
+          name={`${prefix}vatNumber`}
+          label="N° de TVA intracommunautaire"
+          defaultValue={company?.vatNumber}
+          hint="Repris sur les factures (ex. FR12345678901)."
+          className="sm:max-w-xs"
+        />
+      )}
       <TextField name={`${prefix}addressLine`} label="Adresse" defaultValue={company?.addressLine} />
       <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
         <TextField name={`${prefix}postalCode`} label="Code postal" defaultValue={company?.postalCode} />

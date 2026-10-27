@@ -1,7 +1,8 @@
 "use client";
 
 import { ActionForm, SubmitButton } from "@/components/forms/action-form";
-import { FileField, TextField } from "@/components/forms/fields";
+import { FileField, TextareaField, TextField } from "@/components/forms/fields";
+import { DEFAULT_VAT_EXEMPTION_MENTION } from "@/server/domain/invoicing";
 import { saveOrganization } from "./actions";
 
 type Organization = {
@@ -14,6 +15,7 @@ type Organization = {
   managerName: string | null;
   managerTitle: string | null;
   contactEmail: string | null;
+  vatExemptionMention: string | null;
   logoPath: string | null;
   managerSignaturePath: string | null;
 };
@@ -40,6 +42,13 @@ export function OrganizationForm({ organization }: { organization: Organization 
         <TextField name="managerName" label="Nom du responsable" defaultValue={organization?.managerName} />
         <TextField name="managerTitle" label="Fonction du responsable" defaultValue={organization?.managerTitle} />
       </div>
+      <TextareaField
+        name="vatExemptionMention"
+        label="Mention d'exonération de TVA"
+        rows={2}
+        defaultValue={organization?.vatExemptionMention}
+        hint={`Imprimée sur les factures des formations exonérées de TVA. Par défaut : « ${DEFAULT_VAT_EXEMPTION_MENTION} »`}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <FileField name="logo" label="Logo" accept="image/png,image/jpeg" hint="PNG ou JPEG, 4 Mo maximum." />

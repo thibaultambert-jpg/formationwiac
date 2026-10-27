@@ -32,6 +32,7 @@ const trainingSchema = z.object({
     .refine((value) => value > 0 && value <= 9999, "Durée invalide."),
   modality: z.enum(["in_person", "remote", "blended"], { error: "Modalité obligatoire." }),
   priceExclTax: z.number({ error: "Prix invalide." }).min(0, "Prix invalide.").nullable(),
+  vatRate: z.enum(["exempt", "standard_20"], { error: "TVA obligatoire." }),
   active: z.boolean(),
 });
 
@@ -52,6 +53,7 @@ function parseTraining(formData: FormData) {
     durationHours: parseFrenchDecimal(text(formData, "durationHours")) ?? undefined,
     modality: text(formData, "modality") ?? undefined,
     priceExclTax: parseFrenchDecimal(text(formData, "priceExclTax")),
+    vatRate: text(formData, "vatRate") ?? undefined,
     active: checkbox(formData, "active"),
   });
 }
