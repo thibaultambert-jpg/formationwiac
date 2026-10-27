@@ -44,6 +44,10 @@ test("the legal pages are public, linked from the login page (F1, F2, F3)", asyn
   await expect(page.getByRole("heading", { name: "Hébergement" })).toBeVisible();
   await page.goto("/reglement-interieur");
   await expect(page.getByRole("heading", { name: "Règlement intérieur" })).toBeVisible();
+  // An anonymous visitor can get back to the login page from the header.
+  await page.getByRole("link", { name: "Se connecter" }).click();
+  await expect(page).toHaveURL(/\/connexion$/);
+  await page.goto("/reglement-interieur");
   // Short GDPR notice in the footer of the public pages (E2)
   // (its text is editable in the settings, so only its presence is checked here).
   await expect(page.locator('[data-slot="privacy-notice"]')).not.toBeEmpty();
