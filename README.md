@@ -44,6 +44,7 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase Storage (programmes, CV, signatures, documents)     | 2   |
 | `SUPABASE_STORAGE_BUCKET`                   | Nom du bucket privé (`documents` par défaut)                 | 2   |
 | `CRON_SECRET`                               | Protection des tâches planifiées (rappels, évaluations)      | 4   |
+| `PENNYLANE_API_TOKEN`                       | Jeton de l'API Pennylane v2 (facturation des externes)       | 5   |
 
 ## 1. Base de données Supabase
 
@@ -199,6 +200,36 @@ cochée comme telle ou si une inscription est financée par des fonds publics ou
 liste alors les obligations de chaque stagiaire, bloquantes pour les externes et pour les sessions du périmètre.
 
 Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour revenir en arrière.
+
+## Facturation des externes (Pennylane)
+
+Les sessions clôturées sont facturées sur le réalisé, une facture par entreprise payeuse (l'entreprise de facturation de
+l'inscription, sinon celle du participant). Les factures sont créées **en brouillon** dans Pennylane : la comptabilité les
+relit, les numérote et les envoie depuis Pennylane.
+
+Mise en place :
+
+1. Dans Pennylane : **Paramètres › Connectivité › Développeurs**, générer un jeton de l'API v2 avec les droits sur les
+   clients et les factures clients. Le saisir dans la variable `PENNYLANE_API_TOKEN` sur Vercel. Pour un essai, utiliser
+   d'abord le jeton d'un environnement de test Pennylane.
+2. Sur chaque formation, choisir la **TVA des factures** (20 % ou exonérée). Pour l'exonération, la mention légale se
+   règle dans **Paramètres › Organisme** (par défaut : article 261-4-4° a du CGI).
+3. Compléter les fiches entreprises : adresse, email de facturation (ou contact principal), SIRET en France, numéro de TVA
+   intracommunautaire si besoin. La fiche de l'entreprise est créée dans Pennylane à sa première facture.
+
+Facturer une session : liste des sessions, filtre **Facturation › À facturer**, puis onglet **Facturation** de la session.
+
+1. Pour chaque entreprise, l'écran propose le prix appliqué pour un participant présent ou ayant abandonné, 0 € pour un
+   absent, avec les heures signées. Tout montant différent du montant proposé (absence facturée, présence partielle,
+   geste commercial) exige un motif.
+2. **Créer la facture brouillon dans Pennylane** : la facture et ses lignes sont enregistrées, puis envoyées à Pennylane.
+   Une inscription ne peut figurer que sur une seule facture active.
+3. En cas d'erreur (Pennylane indisponible, jeton invalide), l'erreur s'affiche avec un bouton **Réessayer**. La nouvelle
+   tentative cherche d'abord la facture dans Pennylane par sa référence externe : elle ne crée jamais de doublon.
+4. **Détacher** (avec un motif) libère les participants d'une facture supprimée ou annulée par un avoir dans Pennylane,
+   pour les facturer de nouveau. Rien n'est effacé : création, envoi et détachement sont tracés dans l'historique.
+
+Sans jeton, en développement, les factures sont écrites dans `.storage/pennylane/` au lieu d'être envoyées.
 
 ## Émargement, évaluations et preuves
 

@@ -84,6 +84,12 @@ by lot (section 11) and stops at the end of each lot for validation.
   agreements, documents as sent, outbox emails, pedagogical files, evaluations, `index.csv` of every send); the GDPR
   right of access is a ZIP (`exportParticipantArchive()`). Accessibility: `e2e/bo-a11y.spec.ts` runs axe-core
   (WCAG 2.1 A/AA) on the main screens; a new screen must be added there.
+- Invoicing (lot 5, Pennylane API v2): rules in `src/server/domain/invoicing.ts` (payer, proposed line, readiness,
+  payloads), client `src/server/pennylane.ts` (`PENNYLANE_API_TOKEN`, local files in `.storage/pennylane/` in
+  development), service `src/server/services/invoicing.ts`, tab `/admin/sessions/[id]/facturation`. One invoice per
+  closed session and paying company, created as a Pennylane draft; an enrollment is on one active invoice at most
+  (`invoice_lines.active` partial unique index); invoices are never deleted, only detached with a reason. The Pennylane
+  external reference is the invoice id, so a retry looks it up before creating.
 - CSV imports (sessions, trainers, companies, enrollees): pure parsers and example files in
   `src/server/domain/csv-import.ts` (enrollees: `participant-import.ts`), upload and report helpers in
   `src/server/csv-upload.ts`, dialog `CsvImportDialog`, example files served by `/admin/modeles-import/[type]`. Invalid

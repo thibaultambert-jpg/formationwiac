@@ -43,6 +43,7 @@ export default async function SessionLayout({ children, params }: LayoutProps<"/
           { href: `${base}/emargement`, label: "Émargement" },
           { href: `${base}/documents`, label: "Documents" },
           { href: `${base}/evaluations`, label: "Évaluations" },
+          ...(session.openToExternal ? [{ href: `${base}/facturation`, label: "Facturation" }] : []),
           { href: `${base}/historique`, label: "Historique" },
         ]}
       />

@@ -22,6 +22,7 @@ const schema = z.object({
   managerName: z.string().nullable(),
   managerTitle: z.string().nullable(),
   contactEmail: z.email("Adresse email invalide.").nullable(),
+  vatExemptionMention: z.string().nullable(),
 });
 
 export async function saveOrganization(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -37,6 +38,7 @@ export async function saveOrganization(_state: ActionState, formData: FormData):
     managerName: text(formData, "managerName"),
     managerTitle: text(formData, "managerTitle"),
     contactEmail: text(formData, "contactEmail"),
+    vatExemptionMention: text(formData, "vatExemptionMention"),
   });
   if (!parsed.success)
     return errorState(formData, "Certains champs sont invalides.", zodFieldErrors(parsed.error.issues));

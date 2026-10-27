@@ -198,6 +198,7 @@ export function AddExternalDialog({ sessionId, disabled }: { sessionId: string; 
                 company={{
                   name: companyName,
                   siret: null,
+                  vatNumber: null,
                   addressLine: null,
                   postalCode: null,
                   city: null,

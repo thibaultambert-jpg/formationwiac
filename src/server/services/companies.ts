@@ -19,6 +19,12 @@ export const companySchema = z.object({
   postalCode: z.string().nullable(),
   city: z.string().nullable(),
   billingEmail: z.email("Adresse email invalide.").nullable(),
+  vatNumber: z
+    .string()
+    .nullable()
+    .transform((value) => (value ? value.replace(/\s/g, "").toUpperCase() : null))
+    .refine((value) => !value || /^[A-Z]{2}[0-9A-Z]{2,13}$/.test(value), "Numéro de TVA invalide (ex. FR12345678901).")
+    .optional(),
   hubspotCompanyId: z.string().nullable(),
 });
 
@@ -33,6 +39,8 @@ export function parseCompany(formData: FormData, prefix = "") {
     postalCode: text(formData, `${prefix}postalCode`),
     city: text(formData, `${prefix}city`),
     billingEmail: text(formData, `${prefix}billingEmail`)?.toLowerCase() ?? null,
+    // Absent from the compact form (quick creation): left unchanged.
+    vatNumber: formData.has(`${prefix}vatNumber`) ? text(formData, `${prefix}vatNumber`) : undefined,
     hubspotCompanyId: text(formData, `${prefix}hubspotCompanyId`),
   });
 }
@@ -154,7 +162,7 @@ export async function mergeCompanies(targetId: string, duplicateId: string, acto
     });
     // Fill the target's missing fields with the duplicate's values.
     const fill: Prisma.CompanyUncheckedUpdateInput = {};
-    for (const key of ["addressLine", "postalCode", "city", "billingEmail"] as const) {
+    for (const key of ["addressLine", "postalCode", "city", "billingEmail", "vatNumber"] as const) {
       if (!target[key] && duplicate[key]) fill[key] = duplicate[key];
     }
     const siret = !target.siret && duplicate.siret ? duplicate.siret : null;
