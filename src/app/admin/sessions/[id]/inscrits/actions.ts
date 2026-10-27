@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/server/audit";
 import { requireRole } from "@/server/auth/guards";
-import { parseCsv } from "@/server/domain/csv";
+import { importReport, nothingToImport, readCsvUpload } from "@/server/csv-upload";
 import { parseFrenchDecimal } from "@/server/domain/numbers";
 import { parseImportRows } from "@/server/domain/participant-import";
 import { checkbox, errorState, formValues, isConfirmed, text, zodFieldErrors, type ActionState } from "@/server/forms";
@@ -28,7 +28,6 @@ import {
   waiveAgreement,
 } from "@/server/services/enrollments";
 import { noticeForStatus, promotionNotices, scheduleEnrollmentNotices } from "@/server/email/notifications";
-import { MAX_UPLOAD_BYTES, readUpload } from "@/server/storage";
 
 /** BO additions notify the participant unless "Ne pas envoyer d'email" is checked. */
 function notifyNew(formData: FormData, enrollments: { id: string; status: string }[]) {
@@ -247,25 +246,17 @@ export type ImportReport = {
   errors: { line: number; message: string }[];
 };
 
-/** Imports external participants from a CSV file and enrolls them. */
-export async function importExternalCsv(_state: ActionState, formData: FormData): Promise<ActionState> {
+/** Imports participants (external contacts or collaborators) from a CSV file and enrolls them. */
+export async function importParticipantsCsv(_state: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireRole(["admin"]);
   const session = await loadSession(text(formData, "sessionId"));
   if (!session) return errorState(formData, "Session introuvable.");
-  if (!session.openToExternal)
-    return errorState(formData, "Cette session n'est pas ouverte aux participants externes.");
 
-  const file = readUpload(formData.get("file"));
-  if (!file) return errorState(formData, "Sélectionnez un fichier CSV.", { file: "Obligatoire." });
-  if (file.size > MAX_UPLOAD_BYTES) return errorState(formData, "Le fichier dépasse 4 Mo.");
-
-  const { rows, errors } = parseImportRows(parseCsv(await file.text()));
-  if (rows.length === 0) {
-    return errorState(
-      formData,
-      errors.map((error) => `Ligne ${error.line} : ${error.message}`).join(" ") || "Aucune ligne à importer.",
-    );
-  }
+  const upload = await readCsvUpload(formData);
+  if (!upload.ok) return upload.state;
+  const file = { name: upload.name };
+  const { rows, errors } = parseImportRows(upload.rows);
+  if (rows.length === 0) return nothingToImport(formData, errors);
 
   const created: { id: string; status: string }[] = [];
   const report: ImportReport = {
@@ -280,7 +271,42 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
     await db.$transaction(
       async (tx) => {
         const companyCache = new Map<string, string>();
+        const enrollRow = async (participantId: string) => {
+          const existing = await tx.enrollment.findUnique({
+            where: { sessionId_participantId: { sessionId: session.id, participantId } },
+          });
+          if (existing && existing.status !== "cancelled") {
+            report.alreadyEnrolled++;
+            return;
+          }
+          const enrollment = await enrollParticipant(tx, {
+            sessionId: session.id,
+            participantId,
+            source: "back_office",
+            actorId: actor.id,
+          });
+          created.push(enrollment);
+          if (enrollment.status === "waitlisted") report.waitlisted++;
+          else report.confirmed++;
+        };
         for (const row of rows) {
+          if (row.type === "internal") {
+            const user = await tx.user.findUnique({ where: { email: row.email } });
+            if (!user || !user.active) {
+              report.errors.push({
+                line: row.line,
+                message: `aucun compte collaborateur actif pour ${row.email} (il doit s'être connecté une fois)`,
+              });
+              continue;
+            }
+            const internal = await ensureInternalParticipant(tx, user.id, actor.id);
+            await enrollRow(internal.id);
+            continue;
+          }
+          if (!session.openToExternal) {
+            report.errors.push({ line: row.line, message: "session non ouverte aux participants externes" });
+            continue;
+          }
           let participant = await findParticipantByEmail(tx, row.email);
           if (participant && participant.type !== "external") {
             report.errors.push({
@@ -333,22 +359,7 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
             report.createdContacts++;
           }
 
-          const existing = await tx.enrollment.findUnique({
-            where: { sessionId_participantId: { sessionId: session.id, participantId: participant.id } },
-          });
-          if (existing && existing.status !== "cancelled") {
-            report.alreadyEnrolled++;
-            continue;
-          }
-          const enrollment = await enrollParticipant(tx, {
-            sessionId: session.id,
-            participantId: participant.id,
-            source: "back_office",
-            actorId: actor.id,
-          });
-          created.push(enrollment);
-          if (enrollment.status === "waitlisted") report.waitlisted++;
-          else report.confirmed++;
+          await enrollRow(participant.id);
         }
         await audit(tx, {
           userId: actor.id,
@@ -367,17 +378,17 @@ export async function importExternalCsv(_state: ActionState, formData: FormData)
 
   notifyNew(formData, created);
   refresh();
-  const parts = [
-    `${report.confirmed} inscrit(s)`,
-    report.waitlisted ? `${report.waitlisted} en liste d'attente` : null,
-    report.alreadyEnrolled ? `${report.alreadyEnrolled} déjà inscrit(s)` : null,
-    report.createdCompanies ? `${report.createdCompanies} entreprise(s) créée(s)` : null,
-    report.createdContacts ? `${report.createdContacts} contact(s) créé(s)` : null,
-  ].filter(Boolean);
-  const errorText = report.errors.length
-    ? ` Lignes ignorées : ${report.errors.map((error) => `ligne ${error.line} (${error.message})`).join(" ; ")}.`
-    : "";
-  return { status: "success", message: `Import terminé : ${parts.join(", ")}.${errorText}` };
+  const message = importReport(
+    [
+      `${report.confirmed} inscrit(s)`,
+      report.waitlisted > 0 && `${report.waitlisted} en liste d'attente`,
+      report.alreadyEnrolled > 0 && `${report.alreadyEnrolled} déjà inscrit(s)`,
+      report.createdCompanies > 0 && `${report.createdCompanies} entreprise(s) créée(s)`,
+      report.createdContacts > 0 && `${report.createdContacts} contact(s) créé(s)`,
+    ],
+    report.errors,
+  );
+  return { status: "success", message };
 }
 
 const updateSchema = z.object({

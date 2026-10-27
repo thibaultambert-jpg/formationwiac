@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { CsvImportDialog } from "@/components/forms/csv-import-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterBar, param } from "@/components/layout/filter-bar";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,6 +12,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { TRAINER_TYPE_LABELS } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
+import { importTrainersCsv } from "./actions";
 
 export const metadata: Metadata = { title: "Formateurs" };
 
@@ -48,12 +50,32 @@ export default async function TrainersPage({ searchParams }: PageProps<"/admin/f
         title="Formateurs"
         description="Formateurs internes (liés à un compte Google) et externes."
         actions={
-          <Button asChild>
-            <Link href="/admin/formateurs/nouveau">
-              <Plus aria-hidden="true" />
-              Nouveau formateur
-            </Link>
-          </Button>
+          <>
+            <CsvImportDialog
+              title="Importer des formateurs"
+              templateHref="/admin/modeles-import/formateurs"
+              action={importTrainersCsv}
+              description={
+                <>
+                  <p>
+                    Colonnes obligatoires : <strong>prenom</strong>, <strong>nom</strong>, <strong>email</strong>. En
+                    option : type (interne ou externe, externe par défaut), telephone, societe, specialites (séparées
+                    par des virgules), actif (oui/non).
+                  </p>
+                  <p>
+                    Un formateur interne est lié au compte Google de même email (connecté au moins une fois). Un
+                    formateur déjà enregistré avec le même email n&apos;est pas modifié.
+                  </p>
+                </>
+              }
+            />
+            <Button asChild>
+              <Link href="/admin/formateurs/nouveau">
+                <Plus aria-hidden="true" />
+                Nouveau formateur
+              </Link>
+            </Button>
+          </>
         }
       />
       <FilterBar

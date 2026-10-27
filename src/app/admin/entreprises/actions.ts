@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { audit, diff } from "@/server/audit";
 import { requireRole } from "@/server/auth/guards";
+import { importReport, nothingToImport, readCsvUpload } from "@/server/csv-upload";
+import { parseCompanyImport } from "@/server/domain/csv-import";
 import { errorState, formValues, isConfirmed, text, zodFieldErrors, type ActionState } from "@/server/forms";
 import {
   createCompany,
@@ -162,4 +164,53 @@ export async function mergeCompanyAction(_state: ActionState, formData: FormData
     status: "success",
     message: `« ${duplicate.name} » a été fusionnée : ${result.participants} contact(s) et ${result.enrollments} inscription(s) rattachés.`,
   };
+}
+
+/** CSV import of companies: existing ones (same SIRET, or same name without SIRET) are left as they are. */
+export async function importCompaniesCsv(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const upload = await readCsvUpload(formData);
+  if (!upload.ok) return upload.state;
+  const { rows, errors } = parseCompanyImport(upload.rows);
+  if (rows.length === 0) return nothingToImport(formData, errors);
+
+  let created = 0;
+  let existing = 0;
+  await db.$transaction(
+    async (tx) => {
+      for (const row of rows) {
+        const input = {
+          name: row.name,
+          siret: row.siret,
+          addressLine: row.addressLine,
+          postalCode: row.postalCode,
+          city: row.city,
+          billingEmail: row.billingEmail,
+          hubspotCompanyId: null,
+        };
+        const found = input.siret ? await findCompanyBySiret(tx, input.siret) : await findCompanyByName(tx, input.name);
+        if (found) {
+          existing++;
+          continue;
+        }
+        await createCompany(tx, input, actor.id);
+        created++;
+      }
+      await audit(tx, {
+        userId: actor.id,
+        action: "import",
+        entity: "company",
+        entityId: "list",
+        after: { file: upload.name, created, existing, errors: errors.length },
+      });
+    },
+    { timeout: 60_000 },
+  );
+
+  refresh();
+  const message = importReport(
+    [`${created} entreprise(s) créée(s)`, existing > 0 && `${existing} déjà existante(s), non modifiée(s)`],
+    errors,
+  );
+  return { status: "success", message };
 }

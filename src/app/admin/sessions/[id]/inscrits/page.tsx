@@ -121,7 +121,7 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
             <>
               <AddInternalDialog sessionId={session.id} />
               <AddExternalDialog sessionId={session.id} disabled={!session.openToExternal} />
-              <ImportCsvDialog sessionId={session.id} disabled={!session.openToExternal} />
+              <ImportCsvDialog sessionId={session.id} openToExternal={session.openToExternal} />
             </>
           ) : null}
           <Button asChild variant="outline">

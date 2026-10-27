@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Download, Plus } from "lucide-react";
+import { CsvImportDialog } from "@/components/forms/csv-import-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterBar, param } from "@/components/layout/filter-bar";
 import { PageHeader } from "@/components/layout/page-header";
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireRole } from "@/server/auth/guards";
+import { importCompaniesCsv } from "./actions";
 import { CompaniesTabs } from "./tabs";
 
 export const metadata: Metadata = { title: "Entreprises" };
@@ -60,6 +62,18 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
                 Exporter les contacts (CSV)
               </a>
             </Button>
+            <CsvImportDialog
+              title="Importer des entreprises"
+              templateHref="/admin/modeles-import/entreprises"
+              action={importCompaniesCsv}
+              description={
+                <p>
+                  Colonne obligatoire : <strong>raison_sociale</strong>. En option : siret, adresse, code_postal, ville,
+                  email_facturation. Une entreprise déjà enregistrée (même SIRET, ou même raison sociale sans SIRET)
+                  n&apos;est pas modifiée.
+                </p>
+              }
+            />
             <Button asChild>
               <Link href="/admin/entreprises/nouvelle">
                 <Plus aria-hidden="true" />

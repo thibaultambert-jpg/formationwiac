@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit, diff } from "@/server/audit";
 import { requireRole } from "@/server/auth/guards";
+import { importReport, nothingToImport, readCsvUpload } from "@/server/csv-upload";
+import { parseTrainerImport } from "@/server/domain/csv-import";
 import { checkbox, errorState, text, zodFieldErrors, type ActionState } from "@/server/forms";
 import { syncTrainerRole } from "@/server/services/trainer-role";
 import { readUpload, storeUpload, UploadError } from "@/server/storage";
@@ -113,4 +115,86 @@ export async function updateTrainer(_state: ActionState, formData: FormData): Pr
 
   refresh();
   return { status: "success", message: "Fiche formateur enregistrée." };
+}
+
+/**
+ * CSV import of trainers: a trainer with the same email is left as it is; an
+ * internal trainer is linked to the Google account of the same email.
+ */
+export async function importTrainersCsv(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireRole(["admin"]);
+  const upload = await readCsvUpload(formData);
+  if (!upload.ok) return upload.state;
+  const { rows, errors } = parseTrainerImport(upload.rows);
+  if (rows.length === 0) return nothingToImport(formData, errors);
+
+  const report = { created: 0, existing: 0, errors: [...errors] };
+  const linkedUserIds: string[] = [];
+  await db.$transaction(
+    async (tx) => {
+      for (const row of rows) {
+        if (await tx.trainer.findFirst({ where: { email: { equals: row.email, mode: "insensitive" } } })) {
+          report.existing++;
+          continue;
+        }
+        let userId: string | null = null;
+        if (row.type === "internal") {
+          const user = await tx.user.findUnique({ where: { email: row.email }, include: { trainer: true } });
+          if (!user || !user.active) {
+            report.errors.push({
+              line: row.line,
+              message: `aucun compte collaborateur actif pour ${row.email} (il doit s'être connecté une fois)`,
+            });
+            continue;
+          }
+          if (user.trainer) {
+            report.errors.push({ line: row.line, message: "ce compte est déjà lié à une autre fiche formateur" });
+            continue;
+          }
+          userId = user.id;
+        }
+        const trainer = await tx.trainer.create({
+          data: {
+            type: row.type,
+            userId,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email: row.email,
+            phone: row.phone,
+            company: row.company,
+            specialties: row.specialties,
+            active: row.active,
+          },
+        });
+        await audit(tx, {
+          userId: actor.id,
+          action: "create",
+          entity: "trainer",
+          entityId: trainer.id,
+          after: trainer,
+        });
+        if (userId) linkedUserIds.push(userId);
+        report.created++;
+      }
+      await audit(tx, {
+        userId: actor.id,
+        action: "import",
+        entity: "trainer",
+        entityId: "list",
+        after: { file: upload.name, created: report.created, existing: report.existing, errors: report.errors.length },
+      });
+    },
+    { timeout: 60_000 },
+  );
+  for (const userId of linkedUserIds) await syncTrainerRole(userId, actor.id);
+
+  refresh();
+  const message = importReport(
+    [
+      `${report.created} formateur(s) créé(s)`,
+      report.existing > 0 && `${report.existing} déjà existant(s), non modifié(s)`,
+    ],
+    report.errors,
+  );
+  return { status: "success", message };
 }
