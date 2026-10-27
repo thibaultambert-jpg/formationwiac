@@ -179,6 +179,23 @@ Mise en place :
    à chaud partent alors au plus tard une heure après l'échéance, au lieu du lendemain matin. Les règles sont écrites pour
    fonctionner avec les deux fréquences.
 
+### Récap Slack hebdomadaire
+
+Chaque **lundi à partir de 12h (Paris)**, l'application poste dans un canal Slack la liste des sessions ouvertes aux
+collaborateurs internes où l'inscription est encore possible et où il reste des places (dates, modalité, places
+restantes, date limite, lien vers la fiche), avec un lien vers le catalogue. Rien n'est posté s'il n'y a aucune
+session. Deux tâches Cron le lundi (10:00 et 11:00 UTC) couvrent l'heure d'été et d'hiver ; un seul message part par
+semaine (tracé dans le journal, action `slack_digest`).
+
+Mise en place :
+
+1. [api.slack.com/apps](https://api.slack.com/apps) › **Create New App** › **From scratch**, dans l'espace de travail.
+2. **Incoming Webhooks** › activer › **Add New Webhook to Workspace** › choisir le canal.
+3. Copier l'URL `https://hooks.slack.com/services/…` dans la variable `SLACK_WEBHOOK_URL` sur Vercel (Production), puis
+   redéployer. Pour changer de canal, créer un nouveau webhook et remplacer la variable.
+
+En développement, sans webhook, le message est écrit dans `.storage/slack/`.
+
 ## Conventions de formation (participants externes)
 
 Une inscription externe réserve sa place avec le statut **« En attente de convention »**. Elle devient **Confirmée**

@@ -3,5 +3,9 @@
   "framework": "nextjs",
   "buildCommand": "pnpm build:vercel",
   "regions": ["cdg1"],
-  "crons": [{ "path": "/api/cron", "schedule": "15 5 * * *" }]
+  "crons": [
+    { "path": "/api/cron", "schedule": "15 5 * * *" },
+    { "path": "/api/cron", "schedule": "0 10 * * 1" },
+    { "path": "/api/cron", "schedule": "0 11 * * 1" }
+  ]
 }

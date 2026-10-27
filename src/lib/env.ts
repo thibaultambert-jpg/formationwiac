@@ -26,6 +26,9 @@ const serverEnvSchema = z.object({
   // .storage/pennylane/ in development.
   PENNYLANE_API_TOKEN: z.string().min(1).optional(),
   PENNYLANE_API_URL: z.url().default("https://app.pennylane.com/api/external/v2"),
+  // Slack incoming webhook of the channel receiving the weekly digest; when
+  // absent, the digest is written to .storage/slack/ in development.
+  SLACK_WEBHOOK_URL: z.url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
