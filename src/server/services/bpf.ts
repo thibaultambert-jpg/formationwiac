@@ -29,6 +29,7 @@ export async function bpfRows(year: number): Promise<BpfRow[]> {
       participant: { include: { company: { select: { name: true } } } },
       attendances: true,
       corrections: true,
+      invoiceLines: { where: { active: true }, select: { kind: true, unitPriceExclTax: true } },
       session: {
         include: {
           training: { select: { title: true } },
@@ -52,12 +53,34 @@ export async function bpfRows(year: number): Promise<BpfRow[]> {
       })),
     );
     const firstInYear = slots[0].startsAt >= start && slots[0].startsAt < end;
+    // Invoiced training (cancellation fees are not training revenue), else the applied price.
+    const training = enrollment.invoiceLines.filter((line) => line.kind !== "cancellation_fee");
+    const funded = training
+      .filter((line) => line.kind === "funded_training")
+      .reduce((sum, line) => sum + Number(line.unitPriceExclTax), 0);
+    const invoiced = training.reduce((sum, line) => sum + Number(line.unitPriceExclTax), 0);
+    const revenue = !firstInYear
+      ? 0
+      : training.length > 0
+        ? invoiced
+        : enrollment.appliedPrice
+          ? Number(enrollment.appliedPrice)
+          : 0;
     return {
       enrollmentId: enrollment.id,
       participantType: enrollment.participantType,
       fundingType: enrollment.fundingType,
       hours,
-      revenue: firstInYear && enrollment.appliedPrice ? Number(enrollment.appliedPrice) : 0,
+      revenue,
+      // Under subrogation the company's remainder comes from its own funds.
+      ...(firstInYear && funded > 0
+        ? {
+            revenueShares: [
+              { fundingType: enrollment.fundingType, amount: funded },
+              { fundingType: "company" as const, amount: invoiced - funded },
+            ],
+          }
+        : {}),
       subcontracted: enrollment.session.trainers.some((link) => link.trainer.type === "external"),
       session: enrollment.session.reference,
       training: enrollment.session.training.title,

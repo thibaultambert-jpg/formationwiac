@@ -1,8 +1,9 @@
 // Invoicing of external enrollments through Pennylane (lot 5). A closed
-// session is invoiced to each paying company on what actually happened: the
-// app proposes an amount per participant, the admin adjusts it with a reason,
-// and the invoice is created as a draft in Pennylane (numbered and sent from
-// there).
+// session is invoiced on what actually happened, to each paying company and,
+// under subrogation, to each funder (OPCO): the app proposes the lines of
+// each enrollment, the admin adjusts them with a reason, and the invoice is
+// created as a draft in Pennylane (numbered and sent from there). CPF, France
+// Travail and Region funding are paid through their own platforms.
 
 import { formatDate, toParisDateInput } from "@/lib/dates";
 import { normalizeSiret } from "@/server/domain/siret";
@@ -27,12 +28,28 @@ export const DEFAULT_VAT_EXEMPTION_MENTION =
 /** Payment term of the invoices, in days. */
 export const PAYMENT_TERM_DAYS = 30;
 
-/** Enrollment statuses of a closed session that can be invoiced. */
-export const INVOICEABLE_STATUSES = ["present", "absent", "dropped_out"] as const;
+/** Funding types paid through their own platform (EDOF for the CPF, France Travail, the Region): never invoiced here. */
+export const OUTSIDE_FUNDING_TYPES = ["cpf", "france_travail", "region"] as const;
 
-export function isInvoiceable(enrollment: { participantType: string; status: string }): boolean {
+export function invoicedOutside(fundingType: string): boolean {
+  return (OUTSIDE_FUNDING_TYPES as readonly string[]).includes(fundingType);
+}
+
+/**
+ * Enrollment statuses of a closed session that can be invoiced: the training
+ * of a trainee who attended (or not), and a cancellation fee only for a
+ * cancelled enrollment.
+ */
+export const INVOICEABLE_STATUSES = ["present", "absent", "dropped_out", "cancelled"] as const;
+
+/** Statuses whose training is invoiced (the trainee attended at least partly). */
+export const TRAINING_STATUSES = ["present", "dropped_out"] as const;
+
+export function isInvoiceable(enrollment: { participantType: string; status: string; fundingType: string }): boolean {
   return (
-    enrollment.participantType === "external" && (INVOICEABLE_STATUSES as readonly string[]).includes(enrollment.status)
+    enrollment.participantType === "external" &&
+    !invoicedOutside(enrollment.fundingType) &&
+    (INVOICEABLE_STATUSES as readonly string[]).includes(enrollment.status)
   );
 }
 
@@ -44,35 +61,101 @@ export function payerOf(enrollment: {
   return enrollment.billingCompanyId ?? enrollment.participant.companyId;
 }
 
-/**
- * Proposed line: the applied price for a present or dropped-out trainee
- * (training started), nothing for a trainee absent from every slot.
- */
-export function proposeLine(enrollment: { status: string; appliedPrice: number | null }): {
-  include: boolean;
-  amount: number;
-} {
-  if (enrollment.status === "absent") return { include: false, amount: 0 };
-  return { include: true, amount: enrollment.appliedPrice ?? 0 };
-}
+export type LineKind = "training" | "funded_training" | "cancellation_fee";
 
-export type SubmittedLine = {
-  enrollmentId: string;
-  include: boolean;
-  /** Amount excluding tax, NaN when the input is invalid, null when empty. */
-  amount: number | null;
-  proposed: number;
-  reason: string;
+export const LINE_KIND_LABELS: Record<LineKind, string> = {
+  training: "Formation",
+  funded_training: "Formation (prise en charge)",
+  cancellation_fee: "Indemnité de dédit",
 };
-
-export type ValidLine = { enrollmentId: string; amount: number; proposed: number; reason: string | null };
 
 const roundCents = (value: number) => Math.round(value * 100) / 100;
 
 /**
+ * Training amount actually due (agreement, article 5: only the hours followed
+ * are due): the price prorated to the signed hours, the full price at most.
+ */
+export function realizedAmount(price: number, signedHours: number, durationHours: number): number {
+  if (durationHours <= 0) return roundCents(price);
+  return roundCents(price * Math.min(1, signedHours / durationHours));
+}
+
+export type ProposalInput = {
+  status: string;
+  appliedPrice: number | null;
+  signedHours: number;
+  durationHours: number;
+  /** Company paying the training (`payerOf`). */
+  companyId: string | null;
+  fundingSubrogation: boolean;
+  funderId: string | null;
+  fundedAmount: number | null;
+};
+
+export type ProposedLine = {
+  kind: LineKind;
+  /** Company or funder the line is invoiced to. */
+  payerId: string;
+  include: boolean;
+  amount: number;
+  /** Highest amount allowed (cancellation fee: the part of the price not realized). */
+  max?: number;
+};
+
+/**
+ * Proposed lines of an enrollment:
+ * - the realized training, to the company, or under subrogation the funded
+ *   part to the funder (OPCO) and the remainder to the company;
+ * - a cancellation fee, proposed at 0, always to the company and never to a
+ *   funder: it is not a training action and cannot be paid with training funds.
+ */
+export function proposeLines(input: ProposalInput): ProposedLine[] {
+  if (!input.companyId) return [];
+  const price = input.appliedPrice ?? 0;
+  const lines: ProposedLine[] = [];
+  const trains = (TRAINING_STATUSES as readonly string[]).includes(input.status);
+  const realized = trains ? realizedAmount(price, input.signedHours, input.durationHours) : 0;
+
+  if (input.status !== "cancelled") {
+    let remainder = realized;
+    if (input.fundingSubrogation && input.funderId) {
+      const funded = roundCents(Math.min(input.fundedAmount ?? realized, realized));
+      lines.push({ kind: "funded_training", payerId: input.funderId, include: funded > 0, amount: funded });
+      remainder = roundCents(realized - funded);
+    }
+    lines.push({ kind: "training", payerId: input.companyId, include: remainder > 0, amount: remainder });
+  }
+  const unrealized = roundCents(price - realized);
+  if (unrealized > 0) {
+    lines.push({ kind: "cancellation_fee", payerId: input.companyId, include: false, amount: 0, max: unrealized });
+  }
+  return lines;
+}
+
+export type SubmittedLine = {
+  enrollmentId: string;
+  kind: LineKind;
+  include: boolean;
+  /** Amount excluding tax, NaN when the input is invalid, null when empty. */
+  amount: number | null;
+  proposed: number;
+  /** Highest amount allowed, if any. */
+  max?: number;
+  reason: string;
+};
+
+export type ValidLine = {
+  enrollmentId: string;
+  kind: LineKind;
+  amount: number;
+  proposed: number;
+  reason: string | null;
+};
+
+/**
  * Checks the lines submitted by the admin: a positive amount for each
- * included line, a reason whenever it differs from the proposal (an excluded
- * line counts as 0), and at least one line.
+ * included line, within its maximum, a reason whenever it differs from the
+ * proposal (an excluded line counts as 0), and at least one line.
  */
 export function validateInvoiceLines(lines: readonly SubmittedLine[]): { lines: ValidLine[]; errors: string[] } {
   const errors: string[] = [];
@@ -80,22 +163,36 @@ export function validateInvoiceLines(lines: readonly SubmittedLine[]): { lines: 
   for (const line of lines) {
     const amount = line.include ? line.amount : 0;
     if (amount === null || Number.isNaN(amount) || amount < 0) {
-      errors.push("Saisissez un montant HT positif pour chaque participant facturé.");
+      errors.push("Saisissez un montant HT positif pour chaque ligne facturée.");
       continue;
     }
     const rounded = roundCents(amount);
+    if (line.max !== undefined && rounded > roundCents(line.max)) {
+      errors.push("Une indemnité de dédit ne peut pas dépasser la part du prix non réalisée.");
+      continue;
+    }
     const reason = line.reason.trim();
     if (rounded !== roundCents(line.proposed) && !reason) {
       errors.push("Indiquez un motif pour chaque montant différent du montant proposé.");
       continue;
     }
     if (line.include && rounded > 0) {
-      valid.push({ enrollmentId: line.enrollmentId, amount: rounded, proposed: line.proposed, reason: reason || null });
+      valid.push({
+        enrollmentId: line.enrollmentId,
+        kind: line.kind,
+        amount: rounded,
+        proposed: line.proposed,
+        reason: reason || null,
+      });
     }
   }
-  if (errors.length === 0 && valid.length === 0)
-    errors.push("Aucun participant à facturer : cochez au moins une ligne.");
+  if (errors.length === 0 && valid.length === 0) errors.push("Aucune ligne à facturer : cochez au moins une ligne.");
   return { lines: valid, errors: [...new Set(errors)] };
+}
+
+/** VAT of a line: the training's for the training, 20 % for a cancellation fee (not a training action). */
+export function lineVatRate(kind: LineKind, trainingVatRate: VatRateValue): VatRateValue {
+  return kind === "cancellation_fee" ? "standard_20" : trainingVatRate;
 }
 
 export function invoiceTotal(lines: readonly { amount: number }[]): number {
@@ -150,14 +247,23 @@ export function invoiceReadiness(company: InvoicedCompany): string[] {
 }
 
 export function lineLabel(input: {
+  kind: LineKind;
   trainingTitle: string;
   firstName: string;
   lastName: string;
   sessionReference: string;
   firstSlotAt: Date | null;
+  fundingAgreementNumber?: string | null;
 }): string {
   const date = input.firstSlotAt ? ` du ${formatDate(input.firstSlotAt)}` : "";
-  return `Formation « ${input.trainingTitle} » – ${input.firstName} ${input.lastName} – session ${input.sessionReference}${date}`;
+  const subject = `« ${input.trainingTitle} » – ${input.firstName} ${input.lastName} – session ${input.sessionReference}${date}`;
+  if (input.kind === "cancellation_fee")
+    return `Indemnité de dédit (non imputable sur les fonds de la formation professionnelle) – formation ${subject}`;
+  const agreement =
+    input.kind === "funded_training" && input.fundingAgreementNumber
+      ? ` – accord de prise en charge n° ${input.fundingAgreementNumber}`
+      : "";
+  return `Formation ${subject}${agreement}`;
 }
 
 /** Due date of an invoice issued on `issuedAt`. */
@@ -215,14 +321,14 @@ export function toPennylaneInvoice(input: {
   invoiceId: string;
   customerId: number;
   issuedAt: Date;
-  vatRate: VatRateValue;
   sessionReference: string;
   trainingTitle: string;
   vatExemptionMention: string | null;
-  lines: readonly { label: string; amount: number }[];
+  lines: readonly { label: string; amount: number; vatRate: VatRateValue }[];
 }): PennylaneInvoicePayload {
-  const mention =
-    input.vatRate === "exempt" ? input.vatExemptionMention?.trim() || DEFAULT_VAT_EXEMPTION_MENTION : null;
+  const mention = input.lines.some((line) => line.vatRate === "exempt")
+    ? input.vatExemptionMention?.trim() || DEFAULT_VAT_EXEMPTION_MENTION
+    : null;
   return {
     customer_id: input.customerId,
     date: toParisDateInput(input.issuedAt),
@@ -237,7 +343,7 @@ export function toPennylaneInvoice(input: {
       quantity: 1,
       unit: "participant",
       raw_currency_unit_price: line.amount.toFixed(2),
-      vat_rate: PENNYLANE_VAT_CODES[input.vatRate],
+      vat_rate: PENNYLANE_VAT_CODES[line.vatRate],
     })),
   };
 }

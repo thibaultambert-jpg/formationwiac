@@ -66,6 +66,7 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
       include: {
         participant: { include: { company: true } },
         billingCompany: true,
+        funder: { select: { id: true, name: true } },
         evaluations: { where: { type: "positioning", submittedAt: { not: null } }, select: { globalScore: true } },
       },
     }),
@@ -226,6 +227,10 @@ export default async function EnrollmentsPage({ params }: PageProps<"/admin/sess
                           : null,
                         cancellationReason: enrollment.cancellationReason,
                         dropoutReason: enrollment.dropoutReason,
+                        fundingSubrogation: enrollment.fundingSubrogation,
+                        funder: enrollment.funder ? { id: enrollment.funder.id, label: enrollment.funder.name } : null,
+                        fundingAgreementNumber: enrollment.fundingAgreementNumber,
+                        fundedAmount: decimalInput(enrollment.fundedAmount),
                       }}
                     />
                     {enrollment.status !== "cancelled" && enrollment.status !== "waitlisted" ? (

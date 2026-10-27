@@ -399,6 +399,14 @@ const updateSchema = z.object({
   billingCompanyId: z.uuid().nullable(),
   cancellationReason: z.string().nullable(),
   dropoutReason: z.string().nullable(),
+  funding: z
+    .object({
+      subrogation: z.boolean(),
+      funderId: z.uuid().nullable(),
+      agreementNumber: z.string().nullable(),
+      fundedAmount: z.number({ error: "Montant invalide." }).min(0, "Montant invalide.").nullable(),
+    })
+    .optional(),
 });
 
 export async function updateEnrollmentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -411,6 +419,15 @@ export async function updateEnrollmentAction(_state: ActionState, formData: Form
     billingCompanyId: text(formData, "billingCompanyId"),
     cancellationReason: text(formData, "cancellationReason"),
     dropoutReason: text(formData, "dropoutReason"),
+    // Funding details are only in the form of an external enrollment.
+    funding: formData.has("fundingDetails")
+      ? {
+          subrogation: checkbox(formData, "fundingSubrogation"),
+          funderId: text(formData, "funderId"),
+          agreementNumber: text(formData, "fundingAgreementNumber"),
+          fundedAmount: parseFrenchDecimal(text(formData, "fundedAmount")),
+        }
+      : undefined,
   });
   if (!parsed.success)
     return errorState(formData, "Certains champs sont invalides.", zodFieldErrors(parsed.error.issues));

@@ -18,42 +18,46 @@ import {
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ENROLLMENT_STATUS_LABELS, ENROLLMENT_STATUS_TONES } from "@/lib/labels";
+import { LINE_KIND_LABELS } from "@/server/domain/invoicing";
 import { decimalInput, formatDecimal, formatEuros, parseFrenchDecimal } from "@/server/domain/numbers";
+import type { InvoiceFormLine } from "@/server/services/invoicing";
 import { createInvoiceAction, detachInvoiceAction } from "./actions";
-
-export type InvoiceFormLine = {
-  enrollmentId: string;
-  name: string;
-  status: keyof typeof ENROLLMENT_STATUS_LABELS;
-  signedHours: number;
-  appliedPrice: number | null;
-  proposal: { include: boolean; amount: number };
-};
 
 function LineRow({ line, durationHours }: { line: InvoiceFormLine; durationHours: number }) {
   const { state } = useActionFormState();
   const echoed = state.status === "error" ? state.values : undefined;
-  const id = line.enrollmentId;
-  const [include, setInclude] = useState(echoed ? `include_${id}` in echoed : line.proposal.include);
-  const [amount, setAmount] = useState(echoed?.[`amount_${id}`] ?? decimalInput(line.proposal.amount) ?? "");
+  const key = `${line.enrollmentId}_${line.kind}`;
+  const [include, setInclude] = useState(echoed ? `include_${key}` in echoed : line.include);
+  const [amount, setAmount] = useState(echoed?.[`amount_${key}`] ?? decimalInput(line.amount) ?? "");
   const value = include ? parseFrenchDecimal(amount) : 0;
-  const adjusted = value !== null && !Number.isNaN(value) && Math.abs(value - line.proposal.amount) >= 0.005;
+  const adjusted = value !== null && !Number.isNaN(value) && Math.abs(value - line.amount) >= 0.005;
+  const label = `${LINE_KIND_LABELS[line.kind]} de ${line.name}`;
   return (
     <TableRow>
       <TableCell>
-        <input type="hidden" name="enrollmentId" value={id} />
-        <input type="hidden" name={`proposed_${id}`} value={line.proposal.amount} />
+        <input type="hidden" name="line" value={`${line.enrollmentId}:${line.kind}`} />
         <div className="flex items-center gap-2">
           <Checkbox
-            id={`include_${id}`}
-            name={`include_${id}`}
+            id={`include_${key}`}
+            name={`include_${key}`}
             checked={include}
             onChange={(event) => setInclude(event.target.checked)}
           />
-          <label htmlFor={`include_${id}`} className="font-medium">
+          <label htmlFor={`include_${key}`} className="font-medium">
             {line.name}
           </label>
         </div>
+      </TableCell>
+      <TableCell>
+        {LINE_KIND_LABELS[line.kind]}
+        {line.kind === "funded_training" && line.fundingAgreementNumber ? (
+          <span className="text-muted-foreground block text-xs">Accord n° {line.fundingAgreementNumber}</span>
+        ) : null}
+        {line.kind === "cancellation_fee" ? (
+          <span className="text-muted-foreground block text-xs">
+            TVA 20 % · {formatEuros(line.max ?? 0)} HT au plus
+          </span>
+        ) : null}
       </TableCell>
       <TableCell>
         <Badge variant={ENROLLMENT_STATUS_TONES[line.status]}>{ENROLLMENT_STATUS_LABELS[line.status]}</Badge>
@@ -64,22 +68,22 @@ function LineRow({ line, durationHours }: { line: InvoiceFormLine; durationHours
       <TableCell className="text-right whitespace-nowrap">{formatEuros(line.appliedPrice)}</TableCell>
       <TableCell>
         <Input
-          name={`amount_${id}`}
+          name={`amount_${key}`}
           inputMode="decimal"
           value={include ? amount : "0"}
           onChange={(event) => setAmount(event.target.value)}
           disabled={!include}
-          aria-label={`Montant HT facturé pour ${line.name}`}
+          aria-label={`Montant HT : ${label}`}
           className="w-28 text-right"
         />
       </TableCell>
       <TableCell>
         <Input
-          name={`reason_${id}`}
-          defaultValue={echoed?.[`reason_${id}`]}
+          name={`reason_${key}`}
+          defaultValue={echoed?.[`reason_${key}`]}
           required={adjusted}
           placeholder={adjusted ? "Motif obligatoire" : "—"}
-          aria-label={`Motif de l'ajustement pour ${line.name}`}
+          aria-label={`Motif de l'ajustement : ${label}`}
           className="min-w-48"
         />
       </TableCell>
@@ -87,27 +91,21 @@ function LineRow({ line, durationHours }: { line: InvoiceFormLine; durationHours
   );
 }
 
-function Total({ lines }: { lines: readonly InvoiceFormLine[] }) {
-  // Indicative only: the server recomputes the total from the submitted lines.
-  const total = lines.reduce((sum, line) => sum + (line.proposal.include ? line.proposal.amount : 0), 0);
-  return <span>Montant proposé : {formatEuros(total)} HT</span>;
-}
-
 export function CreateInvoiceForm({
   sessionId,
   companyId,
   lines,
   durationHours,
-  vatLabel,
   disabled,
 }: {
   sessionId: string;
   companyId: string;
   lines: readonly InvoiceFormLine[];
   durationHours: number;
-  vatLabel: string;
   disabled: boolean;
 }) {
+  // Indicative only: the server recomputes the total from the submitted lines.
+  const total = lines.reduce((sum, line) => sum + (line.include ? line.amount : 0), 0);
   return (
     <ActionForm action={createInvoiceAction}>
       <input type="hidden" name="sessionId" value={sessionId} />
@@ -116,6 +114,7 @@ export function CreateInvoiceForm({
         <TableHeader>
           <TableRow>
             <TableHead>Participant</TableHead>
+            <TableHead>Ligne</TableHead>
             <TableHead>Statut</TableHead>
             <TableHead className="text-right">Heures signées</TableHead>
             <TableHead className="text-right">Prix appliqué HT</TableHead>
@@ -125,14 +124,12 @@ export function CreateInvoiceForm({
         </TableHeader>
         <TableBody>
           {lines.map((line) => (
-            <LineRow key={line.enrollmentId} line={line} durationHours={durationHours} />
+            <LineRow key={`${line.enrollmentId}_${line.kind}`} line={line} durationHours={durationHours} />
           ))}
         </TableBody>
       </Table>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <p className="text-muted-foreground">
-          <Total lines={lines} /> · {vatLabel}
-        </p>
+        <p className="text-muted-foreground">Montant proposé : {formatEuros(total)} HT</p>
         {disabled ? null : (
           <SubmitButton>
             <Send aria-hidden="true" />

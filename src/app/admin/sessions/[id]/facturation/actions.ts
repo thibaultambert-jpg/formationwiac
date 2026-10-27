@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/guards";
-import type { SubmittedLine } from "@/server/domain/invoicing";
+import { LINE_KIND_LABELS, type LineKind } from "@/server/domain/invoicing";
 import { parseFrenchDecimal } from "@/server/domain/numbers";
 import { errorState, text, type ActionState } from "@/server/forms";
 import { createInvoice, detachInvoice, InvoiceError, pushInvoice } from "@/server/services/invoicing";
@@ -20,15 +20,20 @@ export async function createInvoiceAction(_state: ActionState, formData: FormDat
   const companyId = text(formData, "companyId");
   if (!sessionId || !companyId) return errorState(formData, "Entreprise introuvable.");
 
-  const lines: SubmittedLine[] = formData.getAll("enrollmentId").map((value) => {
-    const id = String(value);
-    return {
-      enrollmentId: id,
-      include: formData.get(`include_${id}`) === "on",
-      amount: parseFrenchDecimal(text(formData, `amount_${id}`)),
-      proposed: Number(text(formData, `proposed_${id}`) ?? 0),
-      reason: text(formData, `reason_${id}`) ?? "",
-    };
+  // One "line" value per proposed line: "<enrollmentId>:<kind>".
+  const lines = formData.getAll("line").flatMap((value) => {
+    const [enrollmentId, kind] = String(value).split(":");
+    if (!enrollmentId || !(kind in LINE_KIND_LABELS)) return [];
+    const key = `${enrollmentId}_${kind}`;
+    return [
+      {
+        enrollmentId,
+        kind: kind as LineKind,
+        include: formData.get(`include_${key}`) === "on",
+        amount: parseFrenchDecimal(text(formData, `amount_${key}`)),
+        reason: text(formData, `reason_${key}`) ?? "",
+      },
+    ];
   });
 
   let result;
