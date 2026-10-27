@@ -8,7 +8,7 @@ import { visibleSessionWhere } from "@/server/services/front";
 import { postToSlack } from "@/server/slack";
 
 /**
- * Weekly Slack digest of the sessions open to collaborators with free seats.
+ * Weekly Slack digest of the sessions open to collaborators (free seats or full).
  * Due on Monday from noon; the audit log keeps one post per week, so the
  * scheduled job can run several times that day. Returns the number of posts.
  */
@@ -24,7 +24,7 @@ export async function sendWeeklySlackDigest(now: Date): Promise<number> {
   const sessions = await db.trainingSession.findMany({
     where: visibleSessionWhere(now),
     include: {
-      training: { select: { title: true, slug: true, modality: true, active: true } },
+      training: { select: { title: true, slug: true, active: true } },
       slots: { orderBy: { startsAt: "asc" }, select: { startsAt: true } },
       _count: { select: { enrollments: { where: { status: { in: [...SEAT_HOLDING_STATUSES] } } } } },
     },
@@ -40,7 +40,6 @@ export async function sendWeeklySlackDigest(now: Date): Promise<number> {
         firstSlotStart: session.slots[0]?.startsAt ?? null,
         trainingTitle: session.training.title,
         trainingSlug: session.training.slug,
-        modality: session.training.modality,
         slotStarts: session.slots.map((slot) => slot.startsAt),
         capacityMax: session.capacityMax,
         occupiedSeats: session._count.enrollments,

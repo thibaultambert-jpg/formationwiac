@@ -181,9 +181,10 @@ Mise en place :
 
 ### Récap Slack hebdomadaire
 
-Chaque **lundi à partir de 12h (Paris)**, l'application poste dans un canal Slack la liste des sessions ouvertes aux
-collaborateurs internes où l'inscription est encore possible et où il reste des places (dates, modalité, places
-restantes, date limite, lien vers la fiche), avec un lien vers le catalogue. Rien n'est posté s'il n'y a aucune
+Chaque **lundi à partir de 12h (Paris)**, l'application poste dans un canal Slack (avec `@ici`) la liste des sessions
+ouvertes aux collaborateurs internes où l'inscription est encore possible, complètes comprises : titre avec le lien
+direct vers la session, jours de formation, nombre d'inscrits, places disponibles ou « complet », et « session
+confirmée » à partir de 6 inscrits (`CONFIRMATION_THRESHOLD`). Rien n'est posté s'il n'y a aucune
 session. Deux tâches Cron le lundi (10:00 et 11:00 UTC) couvrent l'heure d'été et d'hiver ; un seul message part par
 semaine (tracé dans le journal, action `slack_digest`).
 

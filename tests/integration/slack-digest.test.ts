@@ -53,9 +53,10 @@ async function session(suffix: string, capacityMax: number, enrolled: number) {
 }
 
 describe("weekly Slack digest", () => {
-  it("posts the sessions with free seats once a week", async () => {
+  it("posts the open sessions, full ones included, once a week", async () => {
     const open = await session("open", 3, 1);
     const full = await session("full", 1, 1);
+    await db.trainingSession.update({ where: { id: full.session.id }, data: { status: "full" } });
 
     expect(await sendWeeklySlackDigest(new Date(monday.getTime() + 8 * 3_600_000))).toBe(0); // Monday morning
     expect(await sendWeeklySlackDigest(noonParis)).toBe(1);
@@ -66,12 +67,14 @@ describe("weekly Slack digest", () => {
     });
     const ids = (log.after as { sessions: { id: string; remaining: number }[] }).sessions;
     expect(ids).toContainEqual({ id: open.session.id, remaining: 2 });
-    expect(ids.map((item) => item.id)).not.toContain(full.session.id);
+    expect(ids).toContainEqual({ id: full.session.id, remaining: 0 });
 
     const folder = path.join(process.cwd(), ".storage", "slack");
     const contents = await Promise.all(
       (await readdir(folder)).map((file) => readFile(path.join(folder, file), "utf8")),
     );
-    expect(contents.some((body) => body.includes(`/formations/${open.training.slug}|`))).toBe(true);
+    expect(
+      contents.some((body) => body.includes(`/formations/${open.training.slug}#session-${open.session.id}|`)),
+    ).toBe(true);
   });
 });

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDigestMessage,
-  DIGEST_MAX_SESSIONS,
   digestWeekKey,
+  formatDigestDays,
   type DigestSession,
   selectDigestSessions,
   weeklyDigestDue,
@@ -39,7 +39,6 @@ const session = (overrides: Partial<DigestSession> = {}): DigestSession => ({
   firstSlotStart: new Date("2026-11-20T08:00:00Z"),
   trainingTitle: "Excel avancé",
   trainingSlug: "excel-avance",
-  modality: "remote",
   slotStarts: [new Date("2026-11-20T08:00:00Z"), new Date("2026-11-21T08:00:00Z")],
   capacityMax: 10,
   occupiedSeats: 7,
@@ -47,50 +46,85 @@ const session = (overrides: Partial<DigestSession> = {}): DigestSession => ({
 });
 
 describe("weekly Slack digest selection", () => {
-  it("keeps sessions open to collaborators with free seats, earliest first", () => {
+  it("keeps sessions open to collaborators, full ones included, earliest first", () => {
     const later = session({ id: "later", firstSlotStart: new Date("2026-12-01T08:00:00Z") });
-    const items = selectDigestSessions([later, session()], now);
+    const full = session({
+      id: "full",
+      status: "full",
+      occupiedSeats: 10,
+      firstSlotStart: new Date("2026-11-25T08:00:00Z"),
+    });
+    const items = selectDigestSessions([later, full, session()], now);
     expect(items.map((item) => [item.id, item.remaining])).toEqual([
       ["s1", 3],
+      ["full", 0],
       ["later", 3],
     ]);
   });
 
-  it("drops full, closed to internals, started and past-deadline sessions", () => {
+  it("drops closed to internals, drafts, started and past-deadline sessions", () => {
     const sessions = [
-      session({ id: "full", occupiedSeats: 10 }),
-      session({ id: "status-full", status: "full" }),
       session({ id: "external", openToInternal: false }),
       session({ id: "draft", status: "draft" }),
       session({ id: "started", firstSlotStart: new Date("2026-11-02T08:00:00Z") }),
       session({ id: "deadline", registrationDeadline: new Date("2026-11-01T22:59:59Z") }),
     ];
-    expect(selectDigestSessions(sessions, now).map((item) => item.id)).toEqual(["status-full"]);
+    expect(selectDigestSessions(sessions, now)).toEqual([]);
   });
 });
 
 describe("weekly Slack digest message", () => {
-  it("lists each session with dates, modality, seats, deadline and link", () => {
-    const items = selectDigestSessions(
-      [session({ trainingTitle: "R&D <IA>", registrationDeadline: new Date("2026-11-15T22:59:00Z") })],
-      now,
-    );
-    const message = buildDigestMessage(items, "https://formation.example.fr/");
-    expect(message.text).toContain("1 session");
-    const body = JSON.stringify(message.blocks);
-    expect(body).toContain("<https://formation.example.fr/formations/excel-avance|R&amp;D &lt;IA&gt;>");
-    expect(body).toContain("20/11/2026 → 21/11/2026 · Distanciel · *3 places restantes*");
-    expect(body).toContain("Inscription jusqu'au 15/11/2026");
-    expect(body).toContain("<https://formation.example.fr/formations|");
+  it("lists every Paris day of a session", () => {
+    expect(
+      formatDigestDays([
+        new Date("2026-11-03T13:00:00Z"),
+        new Date("2026-11-03T08:00:00Z"),
+        new Date("2026-11-04T08:00:00Z"),
+        new Date("2026-11-09T08:00:00Z"),
+        new Date("2026-11-10T08:00:00Z"),
+      ]),
+    ).toBe("Mardi 03/11/2026, mercredi 04/11/2026, lundi 09/11/2026 et mardi 10/11/2026");
+    expect(formatDigestDays([new Date("2026-11-03T08:00:00Z")])).toBe("Mardi 03/11/2026");
   });
 
-  it("stays within the Slack block limit", () => {
+  it("follows the announced format, with a link to each session", () => {
     const items = selectDigestSessions(
-      Array.from({ length: DIGEST_MAX_SESSIONS + 5 }, (_, index) => session({ id: `s${index}` })),
+      [
+        session({
+          id: "pm2",
+          trainingTitle: "WIVOO - Formation PM2",
+          trainingSlug: "pm2",
+          occupiedSeats: 7,
+          capacityMax: 8,
+        }),
+        session({
+          id: "builder",
+          status: "full",
+          trainingTitle: "WIVOO - Product <Builder>",
+          trainingSlug: "builder",
+          occupiedSeats: 10,
+          firstSlotStart: new Date("2026-11-21T08:00:00Z"),
+        }),
+        session({
+          id: "data",
+          trainingTitle: "Data",
+          trainingSlug: "data",
+          occupiedSeats: 4,
+          firstSlotStart: new Date("2026-11-22T08:00:00Z"),
+        }),
+      ],
       now,
     );
-    const message = buildDigestMessage(items, "https://formation.example.fr");
-    expect(message.blocks.length).toBeLessThanOrEqual(50);
-    expect(JSON.stringify(message.blocks)).toContain("… et 5 autres.");
+    const { text } = buildDigestMessage(items, "https://formation.example.fr/");
+    expect(text.split("\n")).toEqual([
+      "Hello <!here> :wave: Voici les formations ouvertes à l'inscription. Une session est confirmée dès 6 inscrits : inscrivez-vous et faites passer le mot !",
+      "",
+      "• *<https://formation.example.fr/formations/pm2#session-pm2|WIVOO - Formation PM2>* – Vendredi 20/11/2026 et samedi 21/11/2026",
+      "\u2003\u20037 inscrit(s) – 1 place(s) disponible(s) – :white_check_mark: session confirmée",
+      "• *<https://formation.example.fr/formations/builder#session-builder|WIVOO - Product &lt;Builder&gt;>* – Vendredi 20/11/2026 et samedi 21/11/2026",
+      "\u2003\u200310 inscrit(s) – complet – :white_check_mark: session confirmée",
+      "• *<https://formation.example.fr/formations/data#session-data|Data>* – Vendredi 20/11/2026 et samedi 21/11/2026",
+      "\u2003\u20034 inscrit(s) – 6 place(s) disponible(s) – :hourglass_flowing_sand: encore 2 inscrit(s) pour confirmer",
+    ]);
   });
 });
