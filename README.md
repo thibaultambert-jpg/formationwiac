@@ -285,21 +285,30 @@ Chaque migration est fournie avec un script `down.sql` (dans son dossier) pour r
 - **En-têtes de sécurité** : CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` et HSTS sur toutes les
   réponses (`src/lib/security-headers.ts`).
 
-## Import CSV des participants externes
+## Imports CSV
 
-Depuis l'onglet **Inscrits** d'une session ouverte aux externes, bouton **Importer un CSV**. Un modèle est
-téléchargeable dans la fenêtre d'import (`/modele-import-participants.csv`).
+Bouton **Importer un CSV** sur les listes **Sessions**, **Formateurs**, **Entreprises** et dans l'onglet **Inscrits**
+d'une session. Chaque fenêtre d'import propose son fichier exemple (`/admin/modeles-import/sessions`, `formateurs`,
+`entreprises`, `inscrits`).
 
-- Séparateur `;` (Excel en français) ou `,`, encodage UTF-8.
-- Colonnes obligatoires : `entreprise`, `prenom`, `nom`, `email`. Optionnelles : `siret`, `fonction`, `telephone`.
-  Les en-têtes sont reconnus sans tenir compte des accents ni de la casse (`Prénom`, `E-mail`, `Société`…).
-- Un contact existant est retrouvé par son email. Une entreprise existante est retrouvée par son SIRET, sinon par sa
-  raison sociale exacte. Sinon, l'entreprise et le contact sont créés.
-- Les lignes invalides sont ignorées et listées dans le compte rendu. Les autres sont inscrites selon la capacité :
-  confirmées, puis en liste d'attente une fois la session complète.
-
-Les exports CSV (sessions, inscrits d'une session, contacts externes) utilisent le séparateur `;` et un BOM UTF-8 pour
-s'ouvrir directement dans Excel.
+- Séparateur `;` (Excel en français) ou `,`, encodage UTF-8. Les en-têtes sont reconnus sans tenir compte des accents
+  ni de la casse (`Prénom`, `E-mail`, `Société`…).
+- Les lignes invalides sont ignorées et listées dans le compte rendu (avec leur numéro de ligne) ; les autres sont
+  importées. Chaque import est inscrit au journal d'audit.
+- **Sessions** : une ligne par session, créée en brouillon. Colonnes obligatoires `formation` (intitulé exact ou slug),
+  `creneaux` (`12/11/2026 09:00-12:30 | 12/11/2026 13:30-17:00`) et `capacite_max` ; options `capacite_min`, `lieu`,
+  `lien_visio`, `date_limite`, `internes`, `externes`, `qualiopi` (oui/non), `formateurs` (emails), `infos_acces`,
+  `notes_internes`. Mêmes contrôles que le formulaire ; les conflits de formateur sont signalés sans bloquer.
+- **Formateurs** : `prenom`, `nom`, `email` ; options `type` (interne/externe), `telephone`, `societe`, `specialites`,
+  `actif`. Un formateur interne est lié au compte Google de même email. Un formateur existant (même email) n'est pas
+  modifié.
+- **Entreprises** : `raison_sociale` ; options `siret`, `adresse`, `code_postal`, `ville`, `email_facturation`. Une
+  entreprise existante (même SIRET, ou même raison sociale sans SIRET) n'est pas modifiée.
+- **Inscrits** : `prenom`, `nom`, `email`, et `entreprise` pour les externes ; options `type` (interne/externe ; sans
+  type, une ligne sans entreprise est un collaborateur), `siret`, `fonction`, `telephone`. Un collaborateur est
+  retrouvé par son compte (connecté au moins une fois). Un contact externe existant est retrouvé par son email, une
+  entreprise par son SIRET, sinon par sa raison sociale exacte ; sinon ils sont créés. Les inscriptions suivent la
+  capacité : confirmées, puis en liste d'attente une fois la session complète.
 
 ## Tests
 

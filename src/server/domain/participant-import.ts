@@ -1,36 +1,24 @@
 import { z } from "zod";
+import { mapColumns, normalizeHeader, type ColumnSpec, type ImportError } from "@/server/domain/csv-import";
 import { isValidSiret, normalizeSiret } from "@/server/domain/siret";
 
-// CSV import of external participants into a session (BO, "Inscrits" tab).
+// CSV import of participants into a session (BO, "Inscrits" tab): external
+// contacts with their company, or collaborators (internal) found by email.
 
-export const IMPORT_COLUMNS = ["entreprise", "siret", "prenom", "nom", "email", "fonction", "telephone"] as const;
-type ImportColumn = (typeof IMPORT_COLUMNS)[number];
-
-const HEADER_ALIASES: Record<string, ImportColumn> = {
-  entreprise: "entreprise",
-  societe: "entreprise",
-  "raison sociale": "entreprise",
-  siret: "siret",
-  prenom: "prenom",
-  nom: "nom",
-  "nom de famille": "nom",
-  email: "email",
-  "e-mail": "email",
-  mail: "email",
-  courriel: "email",
-  fonction: "fonction",
-  poste: "fonction",
-  telephone: "telephone",
-  tel: "telephone",
-  portable: "telephone",
-};
-
-function normalizeHeader(value: string): string {
-  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[_.]/g, " ").trim();
-}
+const IMPORT_COLUMNS = {
+  type: { aliases: ["type de participant"] },
+  entreprise: { aliases: ["societe", "raison sociale"] },
+  siret: { aliases: [] },
+  prenom: { aliases: [], required: true },
+  nom: { aliases: ["nom de famille"], required: true },
+  email: { aliases: ["e-mail", "mail", "courriel"], required: true },
+  fonction: { aliases: ["poste"] },
+  telephone: { aliases: ["tel", "portable"] },
+} satisfies Record<string, ColumnSpec>;
 
 export type ImportRow = {
   line: number;
+  type: "internal" | "external";
   companyName: string;
   siret: string | null;
   firstName: string;
@@ -40,26 +28,24 @@ export type ImportRow = {
   phone: string | null;
 };
 
-export type ImportError = { line: number; message: string };
+export type { ImportError };
 
 const emailSchema = z.email();
 
+/** "interne"/"externe"; without a type, a row with a company is external and one without is internal. */
+function participantType(value: string, companyName: string): "internal" | "external" | undefined {
+  const normalized = normalizeHeader(value);
+  if (normalized === "") return companyName ? "external" : "internal";
+  if (normalized.startsWith("int") || normalized === "collaborateur") return "internal";
+  if (normalized.startsWith("ext")) return "external";
+  return undefined;
+}
+
 export function parseImportRows(rows: string[][]): { rows: ImportRow[]; errors: ImportError[] } {
   if (rows.length === 0) return { rows: [], errors: [{ line: 1, message: "Le fichier est vide." }] };
-
-  const indexes = new Map<ImportColumn, number>();
-  rows[0].forEach((cell, index) => {
-    const column = HEADER_ALIASES[normalizeHeader(cell)];
-    if (column && !indexes.has(column)) indexes.set(column, index);
-  });
-
-  const missing = (["entreprise", "prenom", "nom", "email"] as const).filter((column) => !indexes.has(column));
-  if (missing.length > 0) {
-    return {
-      rows: [],
-      errors: [{ line: 1, message: `Colonnes obligatoires manquantes : ${missing.join(", ")}.` }],
-    };
-  }
+  const columns = mapColumns(rows[0], IMPORT_COLUMNS);
+  if (!columns.ok) return { rows: [], errors: [columns.error] };
+  const { get } = columns;
 
   const result: ImportRow[] = [];
   const errors: ImportError[] = [];
@@ -67,20 +53,17 @@ export function parseImportRows(rows: string[][]): { rows: ImportRow[]; errors: 
 
   rows.slice(1).forEach((cells, offset) => {
     const line = offset + 2;
-    const get = (column: ImportColumn) => {
-      const index = indexes.get(column);
-      return index === undefined ? "" : (cells[index] ?? "").trim();
-    };
-
-    const email = get("email").toLowerCase();
-    const companyName = get("entreprise");
-    const firstName = get("prenom");
-    const lastName = get("nom");
-    const rawSiret = get("siret");
+    const email = get(cells, "email").toLowerCase();
+    const companyName = get(cells, "entreprise");
+    const type = participantType(get(cells, "type"), companyName);
+    const firstName = get(cells, "prenom");
+    const lastName = get(cells, "nom");
+    const rawSiret = get(cells, "siret");
     const siret = rawSiret ? normalizeSiret(rawSiret) : null;
 
     const problems: string[] = [];
-    if (!companyName) problems.push("entreprise manquante");
+    if (!type) problems.push("type invalide (interne ou externe)");
+    if (type === "external" && !companyName) problems.push("entreprise manquante");
     if (!firstName) problems.push("prénom manquant");
     if (!lastName) problems.push("nom manquant");
     if (!emailSchema.safeParse(email).success) problems.push("email invalide");
@@ -94,13 +77,14 @@ export function parseImportRows(rows: string[][]): { rows: ImportRow[]; errors: 
     seenEmails.add(email);
     result.push({
       line,
+      type: type!,
       companyName,
       siret,
       firstName,
       lastName,
       email,
-      jobTitle: get("fonction") || null,
-      phone: get("telephone") || null,
+      jobTitle: get(cells, "fonction") || null,
+      phone: get(cells, "telephone") || null,
     });
   });
 

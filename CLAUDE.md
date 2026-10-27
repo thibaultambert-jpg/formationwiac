@@ -84,6 +84,10 @@ by lot (section 11) and stops at the end of each lot for validation.
   agreements, documents as sent, outbox emails, pedagogical files, evaluations, `index.csv` of every send); the GDPR
   right of access is a ZIP (`exportParticipantArchive()`). Accessibility: `e2e/bo-a11y.spec.ts` runs axe-core
   (WCAG 2.1 A/AA) on the main screens; a new screen must be added there.
+- CSV imports (sessions, trainers, companies, enrollees): pure parsers and example files in
+  `src/server/domain/csv-import.ts` (enrollees: `participant-import.ts`), upload and report helpers in
+  `src/server/csv-upload.ts`, dialog `CsvImportDialog`, example files served by `/admin/modeles-import/[type]`. Invalid
+  lines are skipped and listed; existing records are never modified by an import.
 - Every CSV export goes through `csvResponse()` with an audit trace (G2); admin downloads of nominative files are
   audited in `/fichiers`. Security headers: `src/lib/security-headers.ts` (applied in `next.config.ts`).
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by
