@@ -9,6 +9,8 @@ import { formatDate, formatDateRange } from "@/lib/dates";
 import { SESSION_STATUS_LABELS, SESSION_STATUS_TONES } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
 import { SEAT_HOLDING_STATUSES } from "@/server/domain/capacity";
+import { formatEuros } from "@/server/domain/numbers";
+import { TO_INVOICE_ENROLLMENT_WHERE, TO_INVOICE_WHERE } from "@/server/services/session-queries";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 
@@ -35,7 +37,7 @@ export default async function AdminDashboardPage() {
   const in30 = new Date(now.getTime() + 30 * DAY);
   const in10 = new Date(now.getTime() + 10 * DAY);
 
-  const [upcoming, completed, failedEmails] = await Promise.all([
+  const [upcoming, completed, failedEmails, toInvoice] = await Promise.all([
     db.trainingSession.findMany({
       where: { status: { in: ["draft", "published", "full"] }, slots: { some: { startsAt: { gte: now, lt: in30 } } } },
       include: {
@@ -57,7 +59,17 @@ export default async function AdminDashboardPage() {
       },
     }),
     db.document.count({ where: { error: { not: null }, createdAt: { gte: new Date(now.getTime() - 7 * DAY) } } }),
+    db.trainingSession.findMany({
+      where: TO_INVOICE_WHERE,
+      include: {
+        training: { select: { title: true } },
+        slots: { orderBy: { startsAt: "asc" }, select: { startsAt: true } },
+        enrollments: { where: TO_INVOICE_ENROLLMENT_WHERE, select: { appliedPrice: true } },
+      },
+    }),
   ]);
+  // Oldest first: the longer a session waits, the later it is paid.
+  toInvoice.sort((a, b) => (a.slots[0]?.startsAt.getTime() ?? 0) - (b.slots[0]?.startsAt.getTime() ?? 0));
   upcoming.sort((a, b) => a.slots[0].startsAt.getTime() - b.slots[0].startsAt.getTime());
 
   // Sessions starting within 10 days below their minimum capacity.
@@ -90,7 +102,7 @@ export default async function AdminDashboardPage() {
     <>
       <PageHeader
         title="Tableau de bord"
-        description="Sessions à venir, points d'attention et émargements à compléter."
+        description="Sessions à venir, points d'attention, émargements à compléter et sessions à facturer."
       />
       {failedEmails > 0 ? (
         <p className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
@@ -168,6 +180,43 @@ export default async function AdminDashboardPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          <section aria-labelledby="invoice-title" className="space-y-3">
+            <h2 id="invoice-title" className="text-lg font-semibold">
+              Sessions à facturer ({toInvoice.length})
+            </h2>
+            {toInvoice.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Toutes les sessions terminées sont facturées.</p>
+            ) : (
+              <>
+                <ul className="divide-y rounded-md border">
+                  {toInvoice.slice(0, 8).map((session) => {
+                    const amount = session.enrollments.reduce(
+                      (sum, enrollment) => sum + Number(enrollment.appliedPrice ?? 0),
+                      0,
+                    );
+                    return (
+                      <li key={session.id} className="p-3 text-sm">
+                        <Link
+                          href={`/admin/sessions/${session.id}/facturation`}
+                          className="font-medium hover:underline"
+                        >
+                          {session.training.title}
+                        </Link>
+                        <span className="text-muted-foreground block">
+                          {formatDateRange(session.slots.map((slot) => slot.startsAt))} · {session.enrollments.length}{" "}
+                          participant(s) externe(s) · {formatEuros(amount)} HT
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Link href="/admin/sessions?facturation=a-facturer" className="text-sm underline underline-offset-4">
+                  {toInvoice.length > 8 ? `Voir les ${toInvoice.length} sessions` : "Voir dans la liste des sessions"}
+                </Link>
+              </>
             )}
           </section>
 

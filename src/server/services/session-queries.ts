@@ -16,20 +16,21 @@ export type SessionFilters = {
 };
 
 /**
- * Closed sessions with a priced external trainee who attended (present or
- * dropped out) and is not on an active invoice. Absent trainees are left out:
- * billing them is decided on the invoice of their company.
+ * Priced external trainee who attended (present or dropped out) and is not on
+ * an active invoice. Absent trainees are left out: billing them is decided on
+ * the invoice of their company.
  */
+export const TO_INVOICE_ENROLLMENT_WHERE = {
+  participantType: "external",
+  status: { in: ["present", "dropped_out"] },
+  appliedPrice: { gt: 0 },
+  invoiceLines: { none: { active: true } },
+} satisfies Prisma.EnrollmentWhereInput;
+
+/** Closed sessions with at least one enrollment to invoice (dashboard, sessions list filter). */
 export const TO_INVOICE_WHERE = {
   status: "completed",
-  enrollments: {
-    some: {
-      participantType: "external",
-      status: { in: ["present", "dropped_out"] },
-      appliedPrice: { gt: 0 },
-      invoiceLines: { none: { active: true } },
-    },
-  },
+  enrollments: { some: TO_INVOICE_ENROLLMENT_WHERE },
 } satisfies Prisma.TrainingSessionWhereInput;
 
 export function readSessionFilters(params: Record<string, string | string[] | undefined>): SessionFilters {
