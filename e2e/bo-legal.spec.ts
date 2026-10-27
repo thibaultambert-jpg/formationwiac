@@ -20,6 +20,19 @@ test("legal texts, contacts and versioned internal regulations (E2, F1-F3)", asy
   await expect(page.getByRole("contentinfo").getByText(`Mention validée ${stamp}.`)).toBeVisible();
 });
 
+test("a signed-in user keeps the site navigation on the legal pages", async ({ page }) => {
+  for (const path of ["/confidentialite", "/mentions-legales", "/reglement-interieur"]) {
+    await page.goto(path);
+    const nav = page.getByRole("navigation", { name: "Navigation principale" });
+    await expect(nav.getByRole("link", { name: "Catalogue" })).toBeVisible();
+  }
+  await page
+    .getByRole("navigation", { name: "Navigation principale" })
+    .getByRole("link", { name: "Mes formations" })
+    .click();
+  await expect(page).toHaveURL(/\/mes-formations$/);
+});
+
 test("BPF page and exports are audited (B7, G2)", async ({ page }) => {
   await page.goto("/admin/bpf?annee=2026&internes=1");
   await expect(page.getByRole("heading", { name: "Bilan pédagogique et financier" })).toBeVisible();
