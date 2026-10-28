@@ -45,6 +45,8 @@ Toutes les variables sont listées et commentées dans [`.env.example`](.env.exa
 | `SUPABASE_STORAGE_BUCKET`                   | Nom du bucket privé (`documents` par défaut)                 | 2   |
 | `CRON_SECRET`                               | Protection des tâches planifiées (rappels, évaluations)      | 4   |
 | `PENNYLANE_API_TOKEN`                       | Jeton de l'API Pennylane v2 (facturation des externes)       | 5   |
+| `PENNYLANE_API_URL`                         | URL de l'API Pennylane (garder la valeur par défaut)         | 5   |
+| `SLACK_WEBHOOK_URL`                         | Webhook Slack du canal du récap hebdomadaire des formations  | 5   |
 
 ## 1. Base de données Supabase
 
@@ -157,7 +159,7 @@ back-office (et à l'import CSV), la case « Ne pas envoyer d'email » permet de
 ## 5. Tâches automatiques (Vercel Cron)
 
 `vercel.json` déclare une tâche quotidienne (`/api/cron`, 05:15 UTC, soit 06:15 ou 07:15 à Paris), compatible avec le plan
-**Hobby**. Elle envoie :
+**Hobby**, et deux exécutions le lundi (10:00 et 11:00 UTC) pour le récap Slack de midi. Elle envoie :
 
 - le **rappel J-X** (X réglable dans **Paramètres › Évaluations et rappels**) aux participants confirmés et aux formateurs ;
 - le **lien d'émargement** personnel le matin de chaque journée de formation, aux participants et aux formateurs (avec la
@@ -386,3 +388,193 @@ pnpm build && pnpm test:e2e  # tests de bout en bout (Playwright), variables d'e
 Les tests de bout en bout créent leurs propres comptes (`e2e-admin@<domaine>`, `e2e-collaborateur@<domaine>`) et des
 cookies de session signés avec `NEXTAUTH_SECRET`. Ils n'utilisent jamais Google et ne doivent être lancés que sur une
 base de développement ou de test.
+
+## Fonctionnalités et état d'avancement
+
+État au 28/10/2026 : les lots 1 à 5 du cahier des charges et les lots de conformité de l'audit
+([`AUDIT_RESULTAT.md`](AUDIT_RESULTAT.md)) sont livrés. Il reste surtout de la configuration et quelques sujets à trancher.
+
+### Fonctionnalités disponibles
+
+**Connexion et rôles**
+
+- **Connexion Google** : réservée aux comptes du domaine `ALLOWED_GOOGLE_DOMAIN`, session de 30 jours, aucun mot de passe.
+- **Rôles** : administrateur, formateur interne, collaborateur. Tout nouveau compte est collaborateur, la première adresse
+  admin vient de `INITIAL_ADMIN_EMAIL` et les rôles se gèrent dans **Paramètres › Utilisateurs**. Les droits sont toujours
+  vérifiés côté serveur.
+
+**Back-office (`/admin`)**
+
+- **Tableau de bord** : sessions des 30 prochains jours avec taux de remplissage, sessions sous la capacité minimale à
+  J-10, émargements non signés, sessions à facturer, emails en échec.
+- **Formations** : fiche (objectifs, prérequis, public, programme PDF, durée, modalité, prix, TVA), thèmes, archivage,
+  bouton « Créer une session » pré-rempli.
+- **Sessions** : vue tableau et vue calendrier mensuel, filtres (formation, formateur, statut, période, facturation),
+  référence automatique, créneaux multiples, duplication, annulation avec email aux inscrits et formateurs. Le statut
+  passe seul à « Complète » puis « Terminée ».
+- **Fiche session**, par onglets :
+  - Informations ;
+  - Inscrits : collaborateur, ou externe avec recherche ou création de l'entreprise et du contact dans la même fenêtre ;
+    import CSV, changement de statut, déplacement vers une autre session, export CSV ;
+  - Conventions ;
+  - Conformité ;
+  - Émargement ;
+  - Documents : envois groupés et ZIP complet ;
+  - Évaluations ;
+  - Facturation ;
+  - Historique.
+- **Formateurs** : internes (liés à un compte) ou externes, spécialités, CV et justificatifs datés, historique des
+  sessions, alerte de conflit de créneaux.
+- **Entreprises et participants externes** : contacts, historique des formations, dédoublonnage SIRET / email, fusion de
+  doublons, export et anonymisation RGPD d'un participant.
+- **Qualité** (`/admin/qualite`) : registre des réclamations, registre d'amélioration continue, indicateurs Qualiopi.
+  Le **BPF** (`/admin/bpf`) est calculé à partir des sessions et des factures.
+- **Paramètres** :
+  - Organisme : SIRET, NDA, logo, signature, mention TVA ;
+  - Thèmes ;
+  - Modèles d'emails ;
+  - Évaluations et rappels : délais et questions ;
+  - Données personnelles : durées de conservation ;
+  - Informations légales ;
+  - Utilisateurs et rôles ;
+  - Journal d'audit.
+
+**Front collaborateurs**
+
+- **Catalogue** : formations ayant une session ouverte aux internes, recherche et filtres (thème, modalité, mois).
+- **Fiche formation** : programme téléchargeable, prochaines sessions avec places restantes, inscription avec fenêtre
+  de confirmation et champ « motivation ou besoin ».
+- **Liste d'attente** : quand la session est complète, l'inscription passe en liste d'attente ; la première place libérée
+  promeut automatiquement le suivant, qui reçoit un email.
+- **Mes formations** : désinscription jusqu'à la date limite, ajout à l'agenda (.ics), attestations, évaluations à remplir.
+- **Mes sessions** (formateurs internes) : liste des inscrits, émargement en direct ou sur tablette.
+
+**Documents, émargement et évaluations**
+
+- **Documents PDF** : convocation, information préalable, convention de formation, feuille d'émargement (provisoire, puis
+  figée avec son empreinte SHA-256 à la clôture), attestation de fin de formation, certificat de réalisation.
+- **Emails** :
+  - confirmation avec .ics, liste d'attente, promotion, convocation, rappel J-X, annulation, liens d'émargement et
+    d'évaluation ;
+  - modèles éditables avec variables ;
+  - chaque envoi est tracé.
+- **Émargement probatoire** : lien personnel par créneau (usage unique, sans connexion), signature à l'écran, horodatage
+  et adresse IP, cosignature du formateur. Les données sont en ajout seul : les corrections sont motivées et rien n'est
+  modifié ni supprimé.
+- **Évaluations** :
+  - à chaud en fin de session, à froid à J+60, relance après 5 jours ;
+  - synthèse (moyennes, répartition, verbatims) et export CSV ;
+  - questionnaires entreprise et formateur.
+
+**Conformité, qualité et RGPD**
+
+- **Externes et Qualiopi** :
+  - périmètre Qualiopi et financement par session ;
+  - convention obligatoire pour les externes, place réservée « en attente de convention » jusqu'à la signature ou à une
+    dérogation motivée ;
+  - SIRET et NDA exigés sur les documents.
+- **Suivi pédagogique** : analyse du besoin, positionnement à l'entrée, évaluation des acquis, besoin d'adaptation
+  (accès restreint et tracé), référent handicap, alertes d'absence, abandons.
+- **RGPD** :
+  - export ZIP des données d'une personne, anonymisation qui conserve les preuves ;
+  - durées de conservation et purge automatique, gel juridique ;
+  - pages publiques `/confidentialite`, `/mentions-legales` et `/reglement-interieur` (versionné) ;
+  - en-têtes de sécurité, exports CSV tracés.
+- **Archivage** : ZIP complet par session (feuille figée, programme, conventions, documents tels qu'envoyés, emails,
+  évaluations, index CSV) et journal d'audit des créations, modifications et envois.
+
+**Facturation, imports et automatisations**
+
+- **Facturation Pennylane** : une facture brouillon par payeur pour chaque session clôturée.
+  - Le montant est calculé au réalisé, au prorata des heures signées.
+  - En cas de subrogation, la part prise en charge est facturée à l'OPCO.
+  - Les inscriptions CPF, France Travail et Région sont réglées hors Pennylane.
+  - L'indemnité de dédit est une ligne séparée.
+  - Une nouvelle tentative ne crée jamais de doublon, et un détachement exige un motif.
+- **Imports CSV** : sessions, formateurs, entreprises et inscrits. Des fichiers modèles sont fournis. Les lignes invalides
+  sont listées et les fiches existantes ne sont jamais modifiées.
+- **Tâches automatiques** (Vercel Cron) : information préalable, rappels, liens d'émargement, clôture des sessions,
+  attestations, évaluations et relances, questionnaires qualité, purge RGPD. Chaque envoi est garanti unique.
+- **Récap Slack hebdomadaire** : chaque lundi midi, liste des sessions ouvertes aux internes (inscrits, places, « session
+  confirmée » à partir de 6 inscrits, lien direct vers chaque session).
+
+**Qualité du code**
+
+- **Tests** : unitaires (règles métier), d'intégration sur PostgreSQL, de bout en bout (Playwright) et d'accessibilité
+  (axe-core, WCAG 2.1 AA).
+- **Données** : jeu de données de démonstration (`pnpm db:seed:demo`).
+
+### Non terminé ou à trancher
+
+- **Questionnaires d'évaluation** : le contenu est celui, provisoire, de l'annexe du cahier des charges. Il doit être
+  remplacé par la version définitive dans **Paramètres › Évaluations et rappels** (aucun redéploiement nécessaire).
+- **Rôle « gestionnaire »** (audit, point E7) : pas créé. Il n'existe que les rôles administrateur, formateur et
+  collaborateur.
+- **Exports des évaluations des salariés** (audit, point G1) : décider s'il faut les anonymiser (avis du CSE).
+- **Envoi Gmail** : seul le compte de service avec délégation est branché ; l'alternative par jeton OAuth du compte
+  expéditeur n'est pas développée.
+- **HubSpot** : l'identifiant HubSpot est saisi sur l'entreprise, mais il n'y a pas de synchronisation.
+- **Hors périmètre V1** :
+  - devis ;
+  - espace de connexion pour les externes ;
+  - paiement en ligne ;
+  - multi-langue ;
+  - application mobile.
+- **Récap Slack** : le seuil « session confirmée » est fixe (6 inscrits, `CONFIRMATION_THRESHOLD`). La capacité minimale
+  propre à chaque session n'est pas utilisée.
+- **Fréquence des tâches automatiques** : une fois par jour (plan Hobby). Avec un plan Pro, passer à toutes les heures
+  pour envoyer les liens d'émargement et évaluations à chaud au plus tôt (voir section 5).
+
+### Reste à configurer
+
+Variables d'environnement sur Vercel (Production), voir [`.env.example`](.env.example) :
+
+- [ ] Obligatoires (l'application ne démarre pas sans) : `DATABASE_URL`, `DIRECT_URL`, `GOOGLE_CLIENT_ID`,
+      `GOOGLE_CLIENT_SECRET`, `ALLOWED_GOOGLE_DOMAIN`, `INITIAL_ADMIN_EMAIL`, `NEXTAUTH_SECRET`, `APP_URL`.
+- [ ] `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (+ `SUPABASE_STORAGE_BUCKET`) : sans elles, le premier fichier
+      téléversé ou généré échoue.
+- [ ] `GOOGLE_SERVICE_ACCOUNT_KEY`, `GMAIL_SENDER_ADDRESS` : sans elles, tous les emails sont enregistrés en échec.
+- [ ] `CRON_SECRET` : sans lui, aucune tâche automatique (rappels, émargement, clôture, évaluations, purge, Slack).
+- [ ] `PENNYLANE_API_TOKEN` : sans lui, le bouton de facturation est désactivé.
+- [ ] `SLACK_WEBHOOK_URL` : sans lui, le récap Slack n'est pas posté.
+
+Services externes (sections 1 à 5 ci-dessus) :
+
+- [ ] Projet Supabase en région UE et bucket privé `documents`.
+- [ ] Client OAuth Google de type « Interne » avec les URL de redirection de production.
+- [ ] Compte de service Gmail avec délégation au niveau du domaine (`gmail.send`), configurée par un super-administrateur
+      Workspace, et une boîte d'envoi réelle.
+- [ ] Projet Vercel : variables, tâches Cron, domaine personnalisé éventuel (à reporter dans le client OAuth et
+      `APP_URL`).
+- [ ] Jeton API v2 Pennylane (droits clients et factures).
+- [ ] Application Slack avec un webhook entrant vers le canal choisi.
+
+Dans l'application, **Paramètres** :
+
+- [ ] **Organisme** :
+  - [ ] raison sociale, adresse ;
+  - [ ] SIRET et numéro de déclaration d'activité, obligatoires pour les conventions et les documents des externes ;
+  - [ ] logo, nom, fonction et signature du responsable ;
+  - [ ] email de contact ;
+  - [ ] mention d'exonération de TVA.
+- [ ] **Informations légales** :
+  - [ ] DPO, référent handicap, contacts pédagogique et administratif ;
+  - [ ] notice d'information, politique de confidentialité et mentions légales, à faire valider par le DPO ;
+  - [ ] règlement intérieur, à téléverser.
+- [ ] **Évaluations et rappels** :
+  - [ ] délais : rappel, évaluation à froid, relance, positionnement ;
+  - [ ] marges d'émargement ;
+  - [ ] adresse des alertes d'absence ;
+  - [ ] questionnaires définitifs.
+- [ ] **Données personnelles** : confirmer les durées de conservation (5 ans par défaut).
+- [ ] **Emails** : relire les modèles.
+- [ ] **Thèmes**.
+- [ ] **Utilisateurs** : rôles, dates de départ des salariés.
+- [ ] **Sur chaque formation** : TVA (20 % ou exonérée).
+- [ ] **Sur chaque entreprise facturée** : adresse, email de facturation, SIRET ou n° de TVA.
+
+Hors application :
+
+- [ ] Contrats de sous-traitance RGPD (Vercel, Supabase, Google) et registre des traitements.
+- [ ] Information du CSE sur le suivi de la présence et les évaluations des salariés.
+- [ ] Publication des informations Qualiopi (indicateurs, accessibilité) sur wiacademy.fr.
