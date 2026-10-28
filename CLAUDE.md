@@ -103,6 +103,9 @@ by lot (section 11) and stops at the end of each lot for validation.
 - Automatic sends: rules are "due now?" checks in `src/server/domain/automation.ts`, run by
   `src/server/services/automation.ts` (cron `/api/cron`, protected by `CRON_SECRET`). Every automatic email has a
   `dedupKey` (unique on `documents`), claimed before sending, so the job can run hourly or daily and twice safely.
+- Weekly Slack digest (Monday from noon, Paris): rules in `src/server/domain/slack-digest.ts`, service
+  `src/server/services/slack-digest.ts` (step of the cron, one post per week through the `slack_digest` audit entry),
+  incoming webhook client `src/server/slack.ts` (`SLACK_WEBHOOK_URL`, `.storage/slack/` in development).
 - Token links (attendance, evaluation, trainer) go through `src/server/tokens.ts` (random 256-bit token, only the
   SHA-256 hash is stored, with an expiry; attendance links also have `validFrom`, `slotId` and `consumedAt`, resolved
   by `resolveAttendanceLink()`); their pages live in `src/app/(public)/` and are public in the proxy.

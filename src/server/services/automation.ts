@@ -27,6 +27,7 @@ import {
   sendEvaluationRequests,
 } from "@/server/services/session-documents";
 import { sendPreTrainingInformation } from "@/server/services/pre-information";
+import { sendWeeklySlackDigest } from "@/server/services/slack-digest";
 import {
   sendAbsenceAlerts,
   sendPositioningRequests,
@@ -52,6 +53,7 @@ export type AutomationReport = {
   purgedFiles: number;
   purgedTechnical: number;
   purgedTokens: number;
+  slackDigest: number;
   errors: string[];
 };
 
@@ -97,6 +99,7 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
     purgedFiles: 0,
     purgedTechnical: 0,
     purgedTokens: 0,
+    slackDigest: 0,
     errors: [],
   };
   const settings = await db.organizationSettings.findUnique({ where: { id: 1 } });
@@ -300,6 +303,11 @@ export async function runScheduledTasks(now = new Date(), actorId: string | null
     const technical = await purgeTechnicalData(now, retention, actorId);
     report.purgedTechnical = technical.technical;
     report.purgedTokens = technical.tokens;
+  });
+
+  // Weekly Slack digest of the trainings open to collaborators (Monday noon).
+  await step(report, "Récap Slack", async () => {
+    report.slackDigest = await sendWeeklySlackDigest(now);
   });
 
   const changed = Object.entries(report).some(([key, value]) =>

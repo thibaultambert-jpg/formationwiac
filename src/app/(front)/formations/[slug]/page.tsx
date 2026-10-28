@@ -178,7 +178,8 @@ export default async function TrainingPage({ params }: PageProps<"/formations/[s
                 return (
                   <li
                     key={session.id}
-                    className="bg-card border-t-primary space-y-3 rounded-xl border border-t-4 p-5 shadow-sm"
+                    id={`session-${session.id}`}
+                    className="bg-card border-t-primary scroll-mt-24 space-y-3 rounded-xl border border-t-4 p-5 shadow-sm"
                   >
                     <ul className="space-y-0.5 text-sm font-medium">
                       {labels.map((label) => (
