@@ -8,9 +8,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/dates";
-import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES } from "@/lib/labels";
+import { FUNDING_TYPE_LABELS, INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES } from "@/lib/labels";
 import { requireRole } from "@/server/auth/guards";
-import { VAT_RATE_LABELS } from "@/server/domain/invoicing";
+import { LINE_KIND_LABELS, VAT_RATE_LABELS } from "@/server/domain/invoicing";
 import { formatEuros } from "@/server/domain/numbers";
 import { loadInvoicingView } from "@/server/services/invoicing";
 import { retryInvoiceAction } from "./actions";
@@ -38,14 +38,23 @@ export default async function InvoicingPage({ params, searchParams }: PageProps<
   if (!view) notFound();
   const result = typeof query.facture === "string" ? RESULT_MESSAGES[query.facture] : undefined;
   const vatLabel = VAT_RATE_LABELS[view.session.training.vatRate];
+  const outsideByFunding = Object.entries(Object.groupBy(view.outside, (item) => item.fundingType));
 
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
-        Une fois la session clôturée, chaque entreprise payeuse est facturée sur le réalisé. Le montant proposé est le
-        prix appliqué pour un participant présent ou ayant abandonné, 0 € pour un absent. Tout ajustement demande un
-        motif. La facture est créée en brouillon dans Pennylane, où elle est numérotée et envoyée.
-      </p>
+      <div className="text-muted-foreground space-y-1 text-sm">
+        <p>
+          Une fois la session clôturée, chaque payeur est facturé sur le réalisé : seules les heures suivies sont dues
+          au titre de la formation (convention, article 5). Le montant proposé est le prix appliqué au prorata des
+          heures signées ; tout ajustement demande un motif. La facture est créée en brouillon dans Pennylane, où elle
+          est numérotée et envoyée.
+        </p>
+        <p>
+          Avec une subrogation, la part prise en charge est facturée au financeur (OPCO) avec le numéro d&apos;accord,
+          le reste à l&apos;entreprise. Un dédit fait l&apos;objet d&apos;une ligne distincte, soumise à la TVA,
+          facturée à l&apos;entreprise seulement. Formation : {vatLabel}.
+        </p>
+      </div>
       {result ? (
         <Alert variant={result.variant}>
           <AlertDescription>{result.text}</AlertDescription>
@@ -78,17 +87,41 @@ export default async function InvoicingPage({ params, searchParams }: PageProps<
               </AlertDescription>
             </Alert>
           ) : null}
+          {outsideByFunding.length > 0 ? (
+            <Alert>
+              <AlertDescription>
+                Facturé hors Pennylane, sur la plateforme du financeur :{" "}
+                {outsideByFunding
+                  .map(
+                    ([funding, items]) =>
+                      `${FUNDING_TYPE_LABELS[funding as keyof typeof FUNDING_TYPE_LABELS]} (${(items ?? []).map((item) => item.name).join(", ")})`,
+                  )
+                  .join(" ; ")}
+                .
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {view.payers.length === 0 ? (
             <EmptyState>Aucun participant externe à facturer.</EmptyState>
           ) : (
             <ul className="space-y-4">
               {view.payers.map((payer) => (
                 <li key={payer.company.id} className="bg-card space-y-4 rounded-xl border p-5 shadow-sm">
-                  <h2 className="text-lg font-bold">
+                  <h2 className="flex flex-wrap items-center gap-2 text-lg font-bold">
                     <Link href={`/admin/entreprises/${payer.company.id}`} className="hover:underline">
                       {payer.company.name}
                     </Link>
+                    {payer.funder ? <Badge variant="info">Financeur (subrogation)</Badge> : null}
                   </h2>
+                  {payer.funder ? (
+                    <p className="text-muted-foreground text-sm">
+                      Joignez à la facture le certificat de réalisation et les feuilles d&apos;émargement (onglet{" "}
+                      <Link href={`/admin/sessions/${view.session.id}/documents`} className="underline">
+                        Documents
+                      </Link>
+                      ), comme le demandent les OPCO pour le paiement.
+                    </p>
+                  ) : null}
                   {payer.missing.length > 0 ? (
                     <Alert variant="warning">
                       <AlertDescription>
@@ -105,7 +138,6 @@ export default async function InvoicingPage({ params, searchParams }: PageProps<
                     companyId={payer.company.id}
                     lines={payer.lines}
                     durationHours={view.durationHours}
-                    vatLabel={vatLabel}
                     disabled={payer.missing.length > 0 || view.pennylane === "none"}
                   />
                 </li>
@@ -129,16 +161,16 @@ export default async function InvoicingPage({ params, searchParams }: PageProps<
                     </Badge>
                   </p>
                   <p className="text-muted-foreground">
-                    {formatEuros(invoice.totalExclTax)} HT · {VAT_RATE_LABELS[invoice.vatRate]} · créée le{" "}
-                    {formatDate(invoice.createdAt)}
+                    {formatEuros(invoice.totalExclTax)} HT · créée le {formatDate(invoice.createdAt)}
                     {invoice.sentAt ? ` · envoyée à Pennylane le ${formatDate(invoice.sentAt)}` : ""}
                     {invoice.pennylaneInvoiceId ? ` · n° Pennylane ${invoice.pennylaneInvoiceId}` : ""}
                   </p>
                   <ul className="text-muted-foreground list-disc pl-5">
                     {invoice.lines.map((line) => (
                       <li key={line.id}>
-                        {line.enrollment.participant.firstName} {line.enrollment.participant.lastName} :{" "}
-                        {formatEuros(line.unitPriceExclTax)} HT
+                        {line.enrollment.participant.firstName} {line.enrollment.participant.lastName} –{" "}
+                        {LINE_KIND_LABELS[line.kind]} : {formatEuros(line.unitPriceExclTax)} HT (
+                        {VAT_RATE_LABELS[line.vatRate]})
                         {line.adjustmentReason ? ` (ajusté : ${line.adjustmentReason})` : ""}
                       </li>
                     ))}

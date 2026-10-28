@@ -90,6 +90,10 @@ by lot (section 11) and stops at the end of each lot for validation.
   closed session and paying company, created as a Pennylane draft; an enrollment is on one active invoice at most
   (`invoice_lines.active` partial unique index); invoices are never deleted, only detached with a reason. The Pennylane
   external reference is the invoice id, so a retry looks it up before creating.
+  Lines have a kind (`proposeLines()`): `training` prorated to signed hours (agreement article 5), `funded_training` to
+  the funder under subrogation (`Enrollment.fundingSubrogation`, `funderId`, agreement number, funded amount), and
+  `cancellation_fee` (dédit: own line, VAT 20 %, never to a funder). An enrollment has one active line per kind. CPF,
+  France Travail and Region are paid on their platforms (`invoicedOutside()`). The BPF counts invoiced training lines.
 - CSV imports (sessions, trainers, companies, enrollees): pure parsers and example files in
   `src/server/domain/csv-import.ts` (enrollees: `participant-import.ts`), upload and report helpers in
   `src/server/csv-upload.ts`, dialog `CsvImportDialog`, example files served by `/admin/modeles-import/[type]`. Invalid

@@ -2,6 +2,7 @@ import "server-only";
 import type { EnrollmentSource, EnrollmentStatus, FundingType, Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
+import { invoicedOutside } from "@/server/domain/invoicing";
 import { audit } from "@/server/audit";
 import {
   automaticSessionStatus,
@@ -194,6 +195,13 @@ export type EnrollmentUpdate = {
   cancellationReason: string | null;
   /** Reason of a dropout (D6), required with the status `dropped_out`. */
   dropoutReason?: string | null;
+  /** Funding details (externals): subrogation to a funder such as an OPCO. */
+  funding?: {
+    subrogation: boolean;
+    funderId: string | null;
+    agreementNumber: string | null;
+    fundedAmount: number | null;
+  };
 };
 
 /** Changes an enrollment from the BO; freeing a seat promotes the waitlist. */
@@ -232,9 +240,26 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
       }
     }
 
+    if (update.funding?.subrogation) {
+      if (!update.funding.funderId)
+        throw new EnrollmentError("Choisissez le financeur (OPCO) qui paie directement la formation.");
+      if (invoicedOutside(update.fundingType ?? current.fundingType))
+        throw new EnrollmentError(
+          "Le CPF, France Travail et la Région se règlent sur leur plateforme : pas de subrogation.",
+        );
+    }
+
     const data = {
       status: update.status,
       ...(update.fundingType ? { fundingType: update.fundingType } : {}),
+      ...(update.funding
+        ? {
+            fundingSubrogation: update.funding.subrogation,
+            funderId: update.funding.funderId,
+            fundingAgreementNumber: update.funding.agreementNumber,
+            fundedAmount: update.funding.fundedAmount,
+          }
+        : {}),
       appliedPrice: update.appliedPrice,
       billingCompanyId: update.billingCompanyId,
       ...(update.status === "cancelled"
@@ -263,12 +288,24 @@ export async function updateEnrollment(enrollmentId: string, update: EnrollmentU
         fundingType: current.fundingType,
         appliedPrice: current.appliedPrice,
         billingCompanyId: current.billingCompanyId,
+        fundingSubrogation: current.fundingSubrogation,
+        funderId: current.funderId,
+        fundingAgreementNumber: current.fundingAgreementNumber,
+        fundedAmount: current.fundedAmount,
       },
       after: {
         status: update.status,
         fundingType: update.fundingType ?? current.fundingType,
         appliedPrice: update.appliedPrice,
         billingCompanyId: update.billingCompanyId,
+        ...(update.funding
+          ? {
+              fundingSubrogation: update.funding.subrogation,
+              funderId: update.funding.funderId,
+              fundingAgreementNumber: update.funding.agreementNumber,
+              fundedAmount: update.funding.fundedAmount,
+            }
+          : {}),
         reason: update.status === "dropped_out" ? update.dropoutReason : update.cancellationReason,
       },
     });

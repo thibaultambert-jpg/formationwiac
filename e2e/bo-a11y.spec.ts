@@ -73,8 +73,19 @@ test("no WCAG A/AA violation on the invoicing screen of a closed session", async
       sessionId,
     ]);
     await client.query(`UPDATE sessions SET status = 'completed' WHERE id = $1`, [sessionId]);
+    // OPCO subrogation: the funder gets its own invoice card.
+    const funder = await client.query<{ id: string }>(
+      `INSERT INTO companies (id, name, updated_at) VALUES (gen_random_uuid(), $1, now()) RETURNING id`,
+      [`OPCO ${stamp}`],
+    );
+    await client.query(
+      `UPDATE enrollments SET funding_type = 'opco', funding_subrogation = true, funder_id = $2,
+       funding_agreement_number = 'PEC-E2E' WHERE session_id = $1`,
+      [sessionId, funder.rows[0].id],
+    );
   });
   await page.goto(`/admin/sessions/${sessionId}/facturation`);
   await expect(page.getByRole("heading", { name: `Société Facture${stamp}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `OPCO ${stamp}` })).toBeVisible();
   await expectAccessible(page);
 });
